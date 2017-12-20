@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+{% block content %}
+<section class="container">
+  <div class="row">
+    <div class="exp">
+      <h3><i class="fa fa-cloud" aria-hidden="true"></i> あなただけの</h3>
+      <p>TootCloudを利用すると、あなたのトゥートを取得して<b>あなただけの</b>ワードクラウドを作ることができます。</p>
+      <p>例えばこんな感じに...</p>
+      <img src="/static/img/sample.png" alt="sample" class="sample">
+    </div>
+  </div>
+  <div class="row">
+    <div class="exp">
+      <h3><i class="fa fa-cog" aria-hidden="true"></i> 納得の</h3>
+      <p>TootCloudでは、ワードクラウドを作成する際に、使用するトゥートの公開範囲や除外する単語を指定することができます。</p>
+      <p>除外する単語を指定することで、『ある』や『これ』、『思う』などの重要性が高くないにも関わらず大きく表示されてしまう単語を除くことができます。</p>
+    </div>
+  </div>
+  <div class="row">
+    <div class="exp">
+      <h3><i class="fa fa-users" aria-hidden="true"></i> 安心の</h3>
+      <p>TootCloudはサーバーにユーザーの認証情報を保存しません。そのため、ユーザーに無断でアカウントをフォローしたり、トゥートしたりすることはありません。また、もしサーバーが不正アクセスを受けてもユーザーの個人情報が流出することはありません。</p>
+      <p>TootCloudのソースコードは<a href="https://github.com/theoria24/TootCloud" target="_blank">GitHubに公開</a>されており、<a href="https://opensource.org/licenses/mit-license.php" target="_blank">MITライセンス</a>の下で自由に利用することができます。</p>
+    </div>
+  </div>
+  <div class="row">
+    <div class="exp center">
+      <a class="button" href="/login">今すぐ作成</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

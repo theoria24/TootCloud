@@ -1,0 +1,33 @@
+{% extends "layout.html" %}
+{% block content %}
+<section class="container">
+  <div class="row">
+    <div class="exp">
+      {% if filename %}
+      <h3>あなたのワードクラウド</h3>
+      <img src="/static/out/{{filename}}.png" alt="result" class="result">
+      <a class="button" href="/setting">作り直す</a>
+    </div>
+  </div>
+  <div class="row">
+    <div class="exp">
+      <h3>投稿</h3>
+      <p>作成したワードクラウドを{{session['uri']}}に投稿します。</p>
+      <form class="form" action="/toot?img={{filename}}" method="post">
+        <fieldset>
+          <textarea name="maintext">TootCloudでワードクラウドを作成しました！ #TootCloud {{site_url}}</textarea>
+          <label>公開範囲の設定</label>
+          <label class="label-inline"><input type="radio" name="visibility" value="public" checked> 公開</label>
+          <label class="label-inline"><input type="radio" name="visibility" value="unlisted"> 未収載</label>
+          <label class="label-inline"><input type="radio" name="visibility" value="private"> 非公開</label>
+          <p><input class="button-primary" type="submit" name="action" value="トゥート！"></p>
+        </fieldset>
+      </form>
+      {% else %}
+      <h3 class="error">エラーが発生しました</h3>
+      <a class="button" href="/setting">再試行</a>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

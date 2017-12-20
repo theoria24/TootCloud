@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% block content %}
+<section class="container">
+  <div class="row">
+    <div class="exp">
+      <h3>ログイン</h3>
+      {% if login=="false" %}
+      <p class="error">値が正しいかを確認して再度送信してください。</p>
+      {% else %}
+      <p>下記のフォームに情報を入力してください。</p>
+      {% endif %}
+      <form class="form" action="/login" method="post">
+        <fieldset>
+          <label for="instanceUrl">インスタンスのアドレス</label>
+          <input type="text" placeholder="example.com" id="instanceUrl" value="" name="instance">
+          <input class="button" type="submit" value="送信">
+        </fieldset>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}

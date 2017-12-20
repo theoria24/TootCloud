@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>TootCloud</title>
+  <link rel="icon" type="image/png" href="/static/img/favicon.png">
+  <link rel="stylesheet" href="//fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic">
+  <link rel="stylesheet" href="//cdn.rawgit.com/necolas/normalize.css/master/normalize.css">
+  <link href="/static/css/milligram.css" rel="stylesheet">
+  <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.css" />
+  <meta property="og:title" content="TootCloud" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="jp_JA" />
+  <meta property="og:url" content="{{site_url}}" />
+  <meta property="og:image" content="{{site_url}}/static/img/ogp.png" />
+  <meta property="og:site_name"  content="TootCloud" />
+  <meta property="og:description" content="TootCloudはあなたのトゥートからワードクラウドを作成するWebサービスです。" />
+  <meta name="twitter:card" content="summary" />
+</head>
+<body>
+  <header class="header">
+    <section class="container">
+      <a href="/" class="title">
+        <img src="/static/img/logo.png" alt="logo" class="logo">
+        <h1>TootCloud</h1>
+      </a>
+      <p>TootCloudはあなたのトゥートからワードクラウドを作成するWebサービスです。</p>
+      {% if status == "logout" %}
+      <a class="button button-red" href="/logout">ログアウト</a>
+      {% elif status == "back" %}
+      <a class="button button-red" href="/">戻る</a>
+      {% elif status == "logout" %}
+      <a class="button button-red" href="/logout">ログアウト</a>
+      {% else %}
+      <a class="button" href="/login">今すぐ作成</a>
+      {% endif %}
+    </section>
+  </header>
+  {% block content %}{% endblock %}
+  <footer class="footer">
+    <section class="container">
+      <div class="copy">
+        &copy; 2017 <a href="https://wug.fun/@theoria" target="_blank">@theoria@wug.fun</a>.
+      </div>
+    </section>
+  </footer>
+</body>
+</html>

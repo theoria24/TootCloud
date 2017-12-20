@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+{% block content %}
+<section class="container">
+  <div class="row">
+    <div class="exp">
+      <h3>設定</h3>
+      {% if login=="false" %}
+      <p class="error">値が正しいか確認して再度送信してください。</p>
+      {% else %}
+      <p>下記のフォームに情報を入力してください。</p>
+      {% endif %}
+      <p>現在 <b>{{session['uri']}}</b> にログインしています。</p>
+      <form class="form" action="/result" method="post">
+        <fieldset>
+          <label for="TootsNum">取得するトゥート数（10から500の値を設定できます。下の設定で除外されるものやブーストもカウントされます。）</label>
+          <input type="number" name="TootsNum" value="200" min="10" max="500" id="TootsNum">
+          <label for="visibility">取得するトゥートの公開範囲</label>
+          <label class="label-inline"><input type="checkbox" name="visibility" value="public" checked> 公開</label>
+          <label class="label-inline"><input type="checkbox" name="visibility" value="unlisted"> 未収載</label>
+          <label class="label-inline"><input type="checkbox" name="visibility" value="private"> 非公開</label>
+          <label for="ExcludeWord">除外する単語（,で区切って複数指定）</label>
+          <textarea placeholder="これ,ない,…" id="ExcludeWord" name="ExcludeWord"></textarea>
+          <input class="button-primary" type="submit" name="action" value="この設定でワードクラウドを作成！">
+        </fieldset>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}

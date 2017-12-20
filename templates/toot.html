@@ -1,0 +1,16 @@
+{% extends "layout.html" %}
+{% block content %}
+<section class="container">
+  <div class="row">
+    <div class="exp">
+      {% if toot_url %}
+      <h3>トゥート成功</h3>
+      <p>トゥートに成功しました。→<a href="{{toot_url}}" target="_blank">確認</a></p>
+      {% else %}
+      <h3>トゥート失敗</h3>
+      <p class="error">投稿に失敗しました。もう一度お試しください。</p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+{% endblock %}

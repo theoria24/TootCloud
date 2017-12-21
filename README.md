@@ -25,7 +25,7 @@ MeCabをPythonで扱うのに便利
 `pip install tinydb`
 
 #### [Flask](http://flask.pocoo.org/)
-手軽にウェブアプリケーションを作成
+手軽にウェブアプリケーションを作成  
 `pip install Flask`
 
 ## あると便利なもの

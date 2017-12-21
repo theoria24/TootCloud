@@ -48,6 +48,7 @@ def checkStatus():
     return(id,scnt)
 
 def reform(text):
+    text = re.sub(":\w+:", "", text)
     text = re.sub("</?p>", "", text)
     text = re.sub("<a href=\".*\".*>(.*)</a>", "", text)
     text = re.sub("</?span.*>", "", text)

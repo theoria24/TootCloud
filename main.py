@@ -9,10 +9,12 @@ import json
 import requests
 import MeCab
 
+
 app = Flask(__name__)
 app.config.from_object('config')
 db = TinyDB('db.json')
 qwy = Query()
+
 
 def register_app(host):
     data = {
@@ -24,6 +26,7 @@ def register_app(host):
     resp = requests.post("https://{host}/api/v1/apps".format(host=host), data=data)
     resp.raise_for_status()
     return resp.json()
+
 
 def get_token(host, client_id, client_secret, code):
     data = {
@@ -37,6 +40,7 @@ def get_token(host, client_id, client_secret, code):
     resp.raise_for_status()
     return resp.json()
 
+
 def checkStatus():
     mstdn = Mastodon(
         client_id = session['client_id'],
@@ -45,7 +49,8 @@ def checkStatus():
         api_base_url = session['uri'])
     id = mstdn.account_verify_credentials()["id"]
     scnt = mstdn.account_verify_credentials()["statuses_count"]
-    return(id,scnt)
+    return(id, scnt)
+
 
 def reform(text):
     text = re.sub(":\w+:", "", text)
@@ -56,28 +61,31 @@ def reform(text):
     text = re.sub("<br\s?/?>", '\n', text)
     return(text)
 
-def getToots(id,lim,max,vis=["public"]):
+
+def getToots(id, lim, max, vis=["public"]):
     text = ""
     mstdn = Mastodon(
         client_id = session['client_id'],
         client_secret = session['client_secret'],
         access_token = session['access_token'],
         api_base_url = session['uri'])
-    ltl = mstdn.account_statuses(id,limit=lim,max_id=max)
+    ltl = mstdn.account_statuses(id, limit=lim, max_id=max)
     for row in ltl:
         if row["reblog"] == None:
             if row["visibility"] in vis:
                 text += reform(row["content"]) + "\n"
         toot_id = row["id"]
-    return(text,toot_id)
+    return(text, toot_id)
+
 
 def create_at(time):
-  id  = int(time) * 1000 + randint(1000)
-  id  = id << 16
-  id += randint(2**16)
-  return(id)
+    id  = int(time) * 1000 + randint(1000)
+    id  = id << 16
+    id += randint(2**16)
+    return(id)
 
-def wc(ttl,vis,exl):
+
+def wc(ttl, vis, exl):
     t = ttl
     check = checkStatus()
     print(check)
@@ -87,16 +95,15 @@ def wc(ttl,vis,exl):
     toots = ""
     max = None
     while t > 0:
-        print(t,max)
+        print(t, max)
         if t > 40:
-            data = getToots(id,40,max,vis)
-            t -= 40
+            data = getToots(id, 40, max, vis)
         else:
-            data = getToots(id,t,max,vis)
-            t -= 40
-        #print(data[0])
+            data = getToots(id, t, max, vis)
+        t -= 40
+        # print(data[0])
         toots += data[0]
-        max = int(data[1]) -1
+        max = int(data[1]) - 1
     kekka = ""
     m = MeCab.Tagger()
     m.parse("")
@@ -107,23 +114,25 @@ def wc(ttl,vis,exl):
         if node.feature.split(',')[0] in target_hinshi:
             if node.feature.split(',')[1] not in exclude:
                 if node.feature.split(',')[0] == '名詞':
-                    #print(node.surface)
+                    # print(node.surface)
                     if node.surface not in exl:
                         kekka += node.surface + "\n"
                 else:
                     if node.feature.split(',')[6] not in exl:
                         kekka += node.feature.split(',')[6] + "\n"
         node = node.next
-    wordcloud = WordCloud(background_color="white", font_path="./Kazesawa-Regular.ttf",width=1024,height=768,stopwords="").generate(kekka)
+    wordcloud = WordCloud(background_color="white", font_path="./Kazesawa-Regular.ttf", width=1024, height=768, stopwords="").generate(kekka)
     fn = create_at(datetime.now().strftime("%s"))
     wordcloud.to_file("./static/out/"+str(fn)+".png")
     return(fn)
 
+
 @app.route('/')
 def index():
-    return render_template('index.html',site_url=app.config['SITE_URL'])
+    return render_template('index.html', site_url=app.config['SITE_URL'])
 
-@app.route('/login',methods=['GET', 'POST'])
+
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     if session.get('access_token') is not None:
         return redirect(url_for('setting'))
@@ -139,11 +148,11 @@ def login():
             try:
                 gotjson = json.loads(requests.get("https://"+instance+"/api/v1/instance").text)
                 if gotjson['uri'] == instance:
-                    client_data = db.search(qwy.uri==instance)
+                    client_data = db.search(qwy.uri == instance)
                     if len(client_data) == 0:
                         rspns = register_app(instance)
                         db.insert({'uri': instance, 'id': rspns['id'], 'client_id': rspns['client_id'], 'client_secret': rspns['client_secret']})
-                        client_data = db.search(qwy.uri==instance)
+                        client_data = db.search(qwy.uri == instance)
                     client_data = client_data[0]
                     session['uri'] = instance
                     session['client_id'] = client_data['client_id']
@@ -156,6 +165,7 @@ def login():
         else:
             return render_template('login.html', status="back", site_url=app.config['SITE_URL'])
 
+
 @app.route('/callback')
 def callback():
     code = request.args.get('code')
@@ -163,12 +173,14 @@ def callback():
     session['access_token'] = tkn['access_token']
     return redirect(url_for('setting'))
 
+
 @app.route('/setting')
 def setting():
     if session.get('access_token') is None:
         return redirect(url_for('login'))
     else:
         return render_template('setting.html', status="logout", site_url=app.config['SITE_URL'])
+
 
 @app.route('/result', methods=['POST'])
 def result():
@@ -180,10 +192,11 @@ def result():
             vis = request.form.getlist("visibility")
             ex = request.form["ExcludeWord"]
             exl = re.split('\W+', ex)
-            filename = wc(num,vis,exl)
+            filename = wc(num, vis, exl)
             return render_template('result.html', status="logout", filename=filename, site_url=app.config['SITE_URL'])
         else:
             return redirect(url_for('setting'))
+
 
 @app.route('/toot', methods=['POST'])
 def toot():
@@ -202,6 +215,7 @@ def toot():
     url = status['url']
     return render_template('toot.html', toot_url=url, status="logout", site_url=app.config['SITE_URL'])
 
+
 @app.route('/logout')
 def logout():
     session.pop('uri', None)
@@ -209,6 +223,7 @@ def logout():
     session.pop('client_secret', None)
     session.pop('access_token', None)
     return redirect(url_for('index'))
+
 
 if __name__ == '__main__':
     app.run()

@@ -2,49 +2,35 @@
 
 あなたのトゥートからワードクラウドを作成。
 
+## 使い方
+1. `git clone https://github.com/theoria24/TootCloud.git`
+1. `cd TootCloud`
+1. `pip install -r requirements.txt`
+1. `config.py.sample`を元に`config.py`を作成
+1. `python main.py`
+
 ## 必要なもの
-たぶんこのあたりが入っていれば動きます。
-#### [Python3](https://www.python.org/)
-#### [Mastodon.py](https://github.com/halcy/Mastodon.py)
-MastodonのAPIを叩くやつ  
-`pip install Mastodon.py`
-
-#### [MeCab](http://taku910.github.io/mecab/)
-日本語をいい感じに分ける
-
-#### [mecab-python3](https://github.com/SamuraiT/mecab-python3)
-MeCabをPythonで扱うのに便利  
-`pip install mecab-python3`
-
-#### [word_cloud](https://github.com/amueller/word_cloud)
-ワードクラウドを作成  
-`pip install wordcloud`
-
-#### [TinyDB](https://github.com/msiemens/tinydb)
-インスタンスごとの`client_secret`とかを管理  
-`pip install tinydb`
-
-#### [Flask](http://flask.pocoo.org/)
-手軽にウェブアプリケーションを作成  
-`pip install Flask`
+### [Python3](https://www.python.org/)
+### [MeCab](http://taku910.github.io/mecab/)
+日本語を分けるのに必要
 
 ## あると便利なもの
-#### [mecab-ipadic-NEologd](https://github.com/neologd/mecab-ipadic-neologd)
+### [mecab-ipadic-NEologd](https://github.com/neologd/mecab-ipadic-neologd)
 固有名詞がいっぱい入っているので便利
 
 ## 含まれているもの
-#### [Kazesawaフォント](https://kazesawa.github.io/)
+### [Kazesawaフォント](https://kazesawa.github.io/)
 [SIL Open Font License](http://scripts.sil.org/OFL)で提供されるフォント。きれい。
 
-#### [Milligram](https://milligram.github.io)
+### [Milligram](https://milligram.github.io)
 [MIT License](https://opensource.org/licenses/mit-license.php)で提供されるCSSフレームワーク。軽い。
 
-## 使い方
-1. 上記のパッケージをあらかじめ準備してください。
-1. `git clone https://github.com/theoria24/TootCloud.git`
-1. `cd TootCloud`
-1. `config.py.sample`を元に`config.py`を作成
-1. `python3 main.py`
+## requirements.txtで入るもの
+* [Mastodon.py](https://github.com/halcy/Mastodon.py)
+* [mecab-python3](https://github.com/SamuraiT/mecab-python3)
+* [word_cloud](https://github.com/amueller/word_cloud)
+* [TinyDB](https://github.com/msiemens/tinydb)
+* [Flask](http://flask.pocoo.org/)
 
 ## やりたい
 * 画像生成でタイムアウトになりがちなのでAjaxとかでなんとかする

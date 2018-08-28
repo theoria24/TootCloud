@@ -121,7 +121,7 @@ def wc(ttl, vis, exl):
                     if node.feature.split(',')[6] not in exl:
                         kekka += node.feature.split(',')[6] + "\n"
         node = node.next
-    wordcloud = WordCloud(background_color="white", font_path="./Kazesawa-Regular.ttf", width=1024, height=768, stopwords="").generate(kekka)
+    wordcloud = WordCloud(background_color="white", font_path="./Kazesawa-Regular.ttf", width=1024, height=768, collocations=False, stopwords="").generate(kekka)
     fn = create_at(datetime.now().strftime("%s"))
     wordcloud.to_file("./static/out/"+str(fn)+".png")
     return(fn)

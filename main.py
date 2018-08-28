@@ -4,6 +4,7 @@ from mastodon import Mastodon
 from wordcloud import WordCloud
 from datetime import datetime
 from numpy.random import *
+from xml.sax.saxutils import unescape
 import re
 import json
 import requests
@@ -59,6 +60,7 @@ def reform(text):
     text = re.sub("</?span.*>", "", text)
     text = re.sub("</?div.*>", "", text)
     text = re.sub("<br\s?/?>", '\n', text)
+    text = unescape(text, {'&apos;': '\'', '&quot;': '"'})
     return(text)
 
 

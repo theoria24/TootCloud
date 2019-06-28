@@ -31,6 +31,7 @@
 * [word_cloud](https://github.com/amueller/word_cloud)
 * [TinyDB](https://github.com/msiemens/tinydb)
 * [Flask](http://flask.pocoo.org/)
+* [Matplotlib](https://matplotlib.org/)
 
 ## やりたい
 * 画像生成でタイムアウトになりがちなのでAjaxとかでなんとかする

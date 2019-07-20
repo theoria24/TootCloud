@@ -15,6 +15,9 @@ app = Flask(__name__)
 app.config.from_object('config')
 db = TinyDB('db.json')
 qwy = Query()
+m = MeCab.Tagger()
+target_hinshi = ['名詞', '形容詞', '形容動詞']
+exclude = ['非自立', '接尾']
 
 
 def register_app(host):
@@ -107,22 +110,16 @@ def wc(ttl, vis, exl):
         toots += data[0]
         max = int(data[1]) - 1
     kekka = ""
-    m = MeCab.Tagger()
-    m.parse("")
-    node = m.parseToNode(toots)
-    target_hinshi = ['名詞', '形容詞', '形容動詞']
-    exclude = ['非自立', '接尾']
-    while node:
-        if node.feature.split(',')[0] in target_hinshi:
-            if node.feature.split(',')[1] not in exclude:
-                if node.feature.split(',')[0] == '名詞':
-                    # print(node.surface)
-                    if node.surface not in exl:
-                        kekka += node.surface + "\n"
+    for chunk in m.parse(toots).splitlines()[:-1]:
+        (surface, feature) = chunk.split('\t')
+        if feature.split(',')[0] in target_hinshi:
+            if feature.split(',')[1] not in exl:
+                if feature.split(',')[0] == '名詞':
+                    if surface not in exl:
+                        kekka += surface + "\n"
                 else:
-                    if node.feature.split(',')[6] not in exl:
-                        kekka += node.feature.split(',')[6] + "\n"
-        node = node.next
+                    if feature.split(',')[6] not in exl:
+                        kekka += feature.split(',')[6] + "\n"
     wordcloud = WordCloud(background_color="white", font_path="./Kazesawa-Regular.ttf", width=1024, height=768, collocations=False, stopwords="").generate(kekka)
     fn = create_at(datetime.now().strftime("%s"))
     wordcloud.to_file("./static/out/"+str(fn)+".png")

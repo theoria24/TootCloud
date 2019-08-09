@@ -205,6 +205,7 @@ def toot():
     img = request.args.get('img')
     text = request.form['maintext']
     vsbl = request.form['visibility']
+    cw = bool(request.form.getlist('sensitive'))
     mstdn = Mastodon(
         client_id = session['client_id'],
         client_secret = session['client_secret'],
@@ -213,7 +214,7 @@ def toot():
     media_path = "./static/out/" + img + ".png"
     image = mstdn.media_post(media_path)
     media_files = [image]
-    status = mstdn.status_post(status=text, media_ids=media_files, visibility=vsbl)
+    status = mstdn.status_post(status=text, media_ids=media_files, visibility=vsbl, sensitive=cw)
     url = status['url']
     return render_template('toot.html', toot_url=url, status="logout", site_url=app.config['SITE_URL'])
 

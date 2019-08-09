@@ -51,9 +51,11 @@ def checkStatus():
         client_secret = session['client_secret'],
         access_token = session['access_token'],
         api_base_url = session['uri'])
-    id = mstdn.account_verify_credentials()["id"]
-    scnt = mstdn.account_verify_credentials()["statuses_count"]
-    return(id, scnt)
+    account = mstdn.account_verify_credentials()
+    id = account["id"]
+    acct = account["acct"]
+    scnt = account["statuses_count"]
+    return(id, scnt, acct)
 
 
 def reform(text):
@@ -170,6 +172,7 @@ def callback():
     code = request.args.get('code')
     tkn = get_token(session['uri'], session['client_id'], session['client_secret'], code)
     session['access_token'] = tkn['access_token']
+    session['acct'] = checkStatus()[2]
     return redirect(url_for('setting'))
 
 

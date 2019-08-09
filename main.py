@@ -172,15 +172,15 @@ def callback():
     code = request.args.get('code')
     tkn = get_token(session['uri'], session['client_id'], session['client_secret'], code)
     session['access_token'] = tkn['access_token']
-    session['acct'] = checkStatus()[2]
     return redirect(url_for('setting'))
 
 
 @app.route('/setting')
 def setting():
-    if session.get('access_token') is None or session.get('acct') is None:
+    if session.get('access_token') is None:
         return redirect(url_for('login'))
     else:
+        session['acct'] = checkStatus()[2]
         return render_template('setting.html', status="logout", site_url=app.config['SITE_URL'])
 
 

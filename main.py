@@ -178,7 +178,7 @@ def callback():
 
 @app.route('/setting')
 def setting():
-    if session.get('access_token') is None:
+    if session.get('access_token') is None or session.get('acct') is None:
         return redirect(url_for('login'))
     else:
         return render_template('setting.html', status="logout", site_url=app.config['SITE_URL'])

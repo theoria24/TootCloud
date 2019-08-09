@@ -122,10 +122,13 @@ def wc(ttl, vis, exl):
                 else:
                     if feature.split(',')[6] not in exl:
                         kekka += feature.split(',')[6] + "\n"
-    wordcloud = WordCloud(background_color="white", font_path="./Kazesawa-Regular.ttf", width=1024, height=768, collocations=False, stopwords="").generate(kekka)
-    fn = create_at(datetime.now().strftime("%s"))
-    wordcloud.to_file("./static/out/"+str(fn)+".png")
-    return(fn)
+    if kekka == "":
+        return None
+    else:
+        wordcloud = WordCloud(background_color="white", font_path="./Kazesawa-Regular.ttf", width=1024, height=768, collocations=False, stopwords="").generate(kekka)
+        fn = create_at(datetime.now().strftime("%s"))
+        wordcloud.to_file("./static/out/"+str(fn)+".png")
+        return(fn)
 
 
 @app.route('/')
@@ -195,7 +198,10 @@ def result():
             ex = request.form["ExcludeWord"]
             exl = re.split('\W+', ex)
             filename = wc(num, vis, exl)
-            return render_template('result.html', status="logout", filename=filename, site_url=app.config['SITE_URL'])
+            if filename == None:
+                return render_template('setting.html', status="logout", site_url=app.config['SITE_URL'], error="notext")
+            else:
+                return render_template('result.html', status="logout", filename=filename, site_url=app.config['SITE_URL'])
         else:
             return redirect(url_for('setting'))
 

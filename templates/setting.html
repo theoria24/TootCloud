@@ -4,8 +4,8 @@
   <div class="row">
     <div class="exp">
       <h3>設定</h3>
-      {% if login=="false" %}
-      <p class="error">値が正しいか確認して再度送信してください。</p>
+      {% if error=="notext" %}
+      <p class="error">指定された条件に合致するトゥートに有意な文字列が含まれていません。取得するトゥート数を増やすか公開範囲を変更してください。</p>
       {% else %}
       <p>下記のフォームに情報を入力してください。</p>
       {% endif %}

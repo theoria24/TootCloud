@@ -16,10 +16,12 @@
       <form class="form" action="/toot?img={{filename}}" method="post">
         <fieldset>
           <textarea name="maintext">TootCloudでワードクラウドを作成しました！ #TootCloud {{site_url}}</textarea>
-          <label>公開範囲の設定</label>
+          <label for="visibility">公開範囲の設定</label>
           <label class="label-inline"><input type="radio" name="visibility" value="public" checked> 公開</label>
           <label class="label-inline"><input type="radio" name="visibility" value="unlisted"> 未収載</label>
           <label class="label-inline"><input type="radio" name="visibility" value="private"> 非公開</label>
+          <label for="sensitive">閲覧注意の設定</label>
+          <label class="label-inline"><input type="checkbox" name="sensitive" value="cw"> 閲覧注意</label>
           <p><input class="button-primary" type="submit" name="action" value="トゥート！"></p>
         </fieldset>
       </form>

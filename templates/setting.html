@@ -9,7 +9,7 @@
       {% else %}
       <p>下記のフォームに情報を入力してください。</p>
       {% endif %}
-      <p>現在 <b>{{session['uri']}}</b> にログインしています。</p>
+      <p>現在 <b>@{{session['acct']}}@{{session['uri']}}</b> にログインしています。</p>
       <form class="form" action="/result" method="post">
         <fieldset>
           <label for="TootsNum">取得するトゥート数（10から500の値を設定できます。下の設定で除外されるものやブーストもカウントされます。）</label>

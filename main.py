@@ -51,9 +51,11 @@ def checkStatus():
         client_secret = session['client_secret'],
         access_token = session['access_token'],
         api_base_url = session['uri'])
-    id = mstdn.account_verify_credentials()["id"]
-    scnt = mstdn.account_verify_credentials()["statuses_count"]
-    return(id, scnt)
+    account = mstdn.account_verify_credentials()
+    id = account["id"]
+    acct = account["acct"]
+    scnt = account["statuses_count"]
+    return(id, scnt, acct)
 
 
 def reform(text):
@@ -178,6 +180,7 @@ def setting():
     if session.get('access_token') is None:
         return redirect(url_for('login'))
     else:
+        session['acct'] = checkStatus()[2]
         return render_template('setting.html', status="logout", site_url=app.config['SITE_URL'])
 
 

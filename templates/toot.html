@@ -5,7 +5,9 @@
     <div class="exp">
       {% if toot_url %}
       <h3>トゥート成功</h3>
-      <iframe src="{{toot_url}}/embed" class="mastodon-embed" style="max-width: 100%; border: 0" width="400" allowfullscreen="allowfullscreen"></iframe><script src="https://{{session['uri']}}/embed.js" async="async"></script>
+      <div style="text-align:center">
+        <iframe src="{{toot_url}}/embed" class="mastodon-embed" style="max-width: 100%; border: 0" width="400" allowfullscreen="allowfullscreen"></iframe><script src="https://{{session['uri']}}/embed.js" async="async"></script>
+      </div>
       {% else %}
       <h3>トゥート失敗</h3>
       <p class="error">投稿に失敗しました。もう一度お試しください。</p>

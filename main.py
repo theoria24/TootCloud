@@ -10,7 +10,6 @@ import json
 import requests
 import MeCab
 
-
 app = Flask(__name__)
 app.config.from_object('config')
 db = TinyDB('db.json')
@@ -18,7 +17,8 @@ qwy = Query()
 m = MeCab.Tagger()
 target_hinshi = ['名詞', '形容詞', '形容動詞']
 exclude = ['非自立', '接尾']
-
+with open("stopwordlist.txt") as f:
+    swl = [s.strip() for s in f.readlines()]
 
 def register_app(host):
     data = {
@@ -195,8 +195,14 @@ def result():
         if request.method == 'POST':
             num = int(request.form["TootsNum"])
             vis = request.form.getlist("visibility")
-            ex = request.form["ExcludeWord"]
-            exl = re.split('\W+', ex)
+            ex_opt = request.form.getlist("ExcludeWord")[0]
+            if ex_opt == "default":
+                exl = swl
+            elif ex_opt == "specify":
+                ex = request.form["exlist"]
+                exl = re.split('\W+', ex)
+            else:
+                exl = []
             filename = wc(num, vis, exl)
             if filename == None:
                 return render_template('setting.html', status="logout", site_url=app.config['SITE_URL'], error="notext")

@@ -7,7 +7,7 @@
       {% if session['uri'] %}
       <p>下記のボタンから{{session['uri']}}にログインしてアプリを認証してください。</p>
       <div class="center">
-        <a class="button" href="https://{{session['uri']}}/oauth/authorize?client_id={{session['client_id']}}&response_type=code&redirect_uri={{site_url}}%2fcallback&scope=read%20write">ログイン</a>
+        <a class="button" href="https://{{session['uri']}}/oauth/authorize?client_id={{session['client_id']}}&response_type=code&redirect_uri={{site_url}}%2fcallback&scope=read:accounts%20read:statuses%20write:media%20write:statuses">ログイン</a>
       </div>
       {% else %}
       <p class="error">エラーが発生しました<a href="/login">こちら</a>からもう一度試してみてください。</p>

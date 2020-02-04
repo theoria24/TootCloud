@@ -24,7 +24,7 @@ def register_app(host):
     data = {
         'client_name': 'TootCloud',
         'redirect_uris': app.config['SITE_URL'] + '/callback',
-        'scopes': 'read write',
+        'scopes': 'read:accounts read:statuses write:media write:statuses',
         'website': app.config['SITE_URL']
     }
     resp = requests.post("https://{host}/api/v1/apps".format(host=host), data=data)

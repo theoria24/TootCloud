@@ -195,14 +195,13 @@ def result():
         if request.method == 'POST':
             num = int(request.form["TootsNum"])
             vis = request.form.getlist("visibility")
-            ex_opt = request.form.getlist("ExcludeWord")[0]
-            if ex_opt == "default":
+            ex_opt = len(request.form.getlist("defaultlist"))
+            if ex_opt == 1:
                 exl = swl
-            elif ex_opt == "specify":
-                ex = request.form["exlist"]
-                exl = re.split('\W+', ex)
             else:
                 exl = []
+            ex = request.form["exlist"]
+            exl.extend(re.split('\W+', ex))
             filename = wc(num, vis, exl)
             if filename == None:
                 return render_template('setting.html', status="logout", site_url=app.config['SITE_URL'], error="notext")

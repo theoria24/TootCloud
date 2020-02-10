@@ -18,10 +18,9 @@
           <label class="label-inline"><input type="checkbox" name="visibility" value="public" checked> 公開</label>
           <label class="label-inline"><input type="checkbox" name="visibility" value="unlisted"> 未収載</label>
           <label class="label-inline"><input type="checkbox" name="visibility" value="private"> 非公開</label>
-          <label for="ExcludeWord">除外ワード</label>
-          <label class="label-inline"><input type="radio" name="ExcludeWord" value="none"> なし</label>
-          <label class="label-inline"><input type="radio" name="ExcludeWord" value="default" checked> デフォルトの除外ワードを使う</label>
-          <label class="label-inline"><input type="radio" name="ExcludeWord" value="specify"> 以下で指定する（,で区切って複数指定）</label>
+          <label for="defaultlist">除外ワード</label>
+          <label class="label-inline"><input type="checkbox" name="defaultlist" value="true" checked> デフォルトの除外ワードを使う</label>
+          <label for="exlist">除外ワードを指定（,で区切って複数指定）</label>
           <textarea placeholder="これ,ない,…" id="ExcludeWord" name="exlist"></textarea>
           <input class="button-primary" type="submit" name="action" value="この設定でワードクラウドを作成！">
         </fieldset>

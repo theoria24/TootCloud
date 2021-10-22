@@ -9,6 +9,7 @@ import re
 import json
 import requests
 import MeCab
+from collections import defaultdict
 
 app = Flask(__name__)
 app.config.from_object('config')
@@ -111,21 +112,21 @@ def wc(ttl, vis, exl):
         # print(data[0])
         toots += data[0]
         max = int(data[1]) - 1
-    kekka = ""
+    kekka = defaultdict(int)
     for chunk in m.parse(toots).splitlines()[:-1]:
         (surface, feature) = chunk.split('\t')
         if feature.split(',')[0] in target_hinshi:
             if feature.split(',')[1] not in exl:
                 if feature.split(',')[0] == '名詞':
                     if surface not in exl:
-                        kekka += surface + "\n"
+                        kekka[surface] +=  1
                 else:
                     if feature.split(',')[6] not in exl:
-                        kekka += feature.split(',')[6] + "\n"
-    if kekka == "":
+                        kekka[feature.split(',')[6]] += 1
+    if kekka == {}:
         return None
     else:
-        wordcloud = WordCloud(background_color="white", font_path="./Kazesawa-Regular.ttf", width=1024, height=768, collocations=False, stopwords="").generate(kekka)
+        wordcloud = WordCloud(background_color="white", font_path="./Kazesawa-Regular.ttf", width=1024, height=768, collocations=False, stopwords="").generate_from_frequencies(kekka)
         fn = create_at(datetime.now().strftime("%s"))
         wordcloud.to_file("./static/out/"+str(fn)+".png")
         return(fn)

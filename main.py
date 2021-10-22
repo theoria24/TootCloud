@@ -27,7 +27,7 @@ def register_app(host):
         'scopes': 'read:accounts read:statuses write:media write:statuses',
         'website': app.config['SITE_URL']
     }
-    resp = requests.post("https://{host}/api/v1/apps".format(host=host), data=data)
+    resp = requests.post("https://{host}/api/v1/apps".format(host=host), data=data, headers={'User-Agent': "TootCloud"})
     resp.raise_for_status()
     return resp.json()
 
@@ -40,7 +40,7 @@ def get_token(host, client_id, client_secret, code):
         'client_secret': client_secret,
         'code': code
     }
-    resp = requests.post("https://{host}/oauth/token".format(host=host), data=data)
+    resp = requests.post("https://{host}/oauth/token".format(host=host), data=data, headers={'User-Agent': "TootCloud"})
     resp.raise_for_status()
     return resp.json()
 
@@ -150,7 +150,7 @@ def login():
             instance = re.sub(r'/$', "", instance)
             instance = instance.encode('idna').decode('utf-8')
             try:
-                gotjson = json.loads(requests.get("https://"+instance+"/api/v1/instance").text)
+                gotjson = json.loads(requests.get("https://"+instance+"/api/v1/instance", headers={'User-Agent': "TootCloud"}).text)
                 if gotjson['uri'] == instance:
                     client_data = db.search(qwy.uri == instance)
                     if len(client_data) == 0:

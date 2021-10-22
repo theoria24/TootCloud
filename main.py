@@ -93,7 +93,7 @@ def create_at(time):
     return(id)
 
 
-def wc(ttl, vis, exl):
+def wc(ttl, vis, exl, udic):
     t = ttl
     check = checkStatus()
     print(check)
@@ -113,6 +113,9 @@ def wc(ttl, vis, exl):
         toots += data[0]
         max = int(data[1]) - 1
     kekka = defaultdict(int)
+    for word in udic:
+        kekka[word] = toots.count(word)
+        toots = re.sub(word, " ", toots)
     for chunk in m.parse(toots).splitlines()[:-1]:
         (surface, feature) = chunk.split('\t')
         if feature.split(',')[0] in target_hinshi:
@@ -203,7 +206,8 @@ def result():
                 exl = []
             ex = request.form["exlist"]
             exl.extend(re.split('\W+', ex))
-            filename = wc(num, vis, exl)
+            udic = request.form["userdict"].splitlines()
+            filename = wc(num, vis, exl, udic)
             if filename == None:
                 return render_template('setting.html', status="logout", site_url=app.config['SITE_URL'], error="notext")
             else:

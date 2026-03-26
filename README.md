@@ -26,12 +26,12 @@
 [MIT License](https://opensource.org/licenses/mit-license.php)で提供されるCSSフレームワーク。軽い。
 
 ## requirements.txtで入るもの
-* [Mastodon.py](https://github.com/halcy/Mastodon.py)
-* [mecab-python3](https://github.com/SamuraiT/mecab-python3)
-* [word_cloud](https://github.com/amueller/word_cloud)
-* [TinyDB](https://github.com/msiemens/tinydb)
-* [Flask](http://flask.pocoo.org/)
-* [Matplotlib](https://matplotlib.org/)
+* [Mastodon.py](https://github.com/halcy/Mastodon.py) 2.x
+* [mecab-python3](https://github.com/SamuraiT/mecab-python3) 1.x
+* [word_cloud](https://github.com/amueller/word_cloud) 1.9.x
+* [TinyDB](https://github.com/msiemens/tinydb) 4.x
+* [Flask](https://flask.palletsprojects.com/) 3.x
+* [Matplotlib](https://matplotlib.org/) 3.10.x
 
 ## やりたい
 * 画像生成でタイムアウトになりがちなのでAjaxとかでなんとかする

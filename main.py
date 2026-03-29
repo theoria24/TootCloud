@@ -3,7 +3,7 @@ from tinydb import TinyDB, Query
 from mastodon import Mastodon
 from wordcloud import WordCloud
 from datetime import datetime
-from numpy.random import *
+from numpy.random import randint
 from xml.sax.saxutils import unescape
 import re
 import json
@@ -59,12 +59,12 @@ def checkStatus():
 
 
 def reform(text):
-    text = re.sub(":\w+:", "", text)
-    text = re.sub("</?p>", "", text)
-    text = re.sub("<a href=\".*\".*>(.*)</a>", "", text)
-    text = re.sub("</?span.*>", "", text)
-    text = re.sub("</?div.*>", "", text)
-    text = re.sub("<br\s?/?>", '\n', text)
+    text = re.sub(r":\w+:", "", text)
+    text = re.sub(r"</?p>", "", text)
+    text = re.sub(r'<a href=".*".*>(.*)</a>', "", text)
+    text = re.sub(r"</?span.*>", "", text)
+    text = re.sub(r"</?div.*>", "", text)
+    text = re.sub(r"<br\s?/?>", '\n', text)
     text = unescape(text, {'&apos;': '\'', '&quot;': '"'})
     return(text)
 
@@ -126,7 +126,7 @@ def wc(ttl, vis, exl):
         return None
     else:
         wordcloud = WordCloud(background_color="white", font_path="./Kazesawa-Regular.ttf", width=1024, height=768, collocations=False, stopwords="").generate(kekka)
-        fn = create_at(datetime.now().strftime("%s"))
+        fn = create_at(int(datetime.now().timestamp()))
         wordcloud.to_file("./static/out/"+str(fn)+".png")
         return(fn)
 
@@ -201,7 +201,7 @@ def result():
             else:
                 exl = []
             ex = request.form["exlist"]
-            exl.extend(re.split('\W+', ex))
+            exl.extend(re.split(r'\W+', ex))
             filename = wc(num, vis, exl)
             if filename == None:
                 return render_template('setting.html', status="logout", site_url=app.config['SITE_URL'], error="notext")

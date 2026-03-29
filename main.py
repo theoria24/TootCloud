@@ -14,7 +14,7 @@ app = Flask(__name__)
 app.config.from_object("config")
 db = TinyDB("db.json")
 qwy = Query()
-m = MeCab.Tagger()
+m = MeCab.Tagger(app.config["MECAB_OPT"])
 target_hinshi = ["名詞", "形容詞", "形容動詞"]
 exclude = ["非自立", "接尾"]
 with open("stopwordlist.txt") as f:

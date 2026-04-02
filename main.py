@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from tinydb import TinyDB, Query
 from mastodon import Mastodon
 from wordcloud import WordCloud
@@ -9,6 +9,8 @@ import re
 import json
 import requests
 import MeCab
+import threading
+from threading import Lock
 
 app = Flask(__name__)
 app.config.from_object("config")
@@ -19,6 +21,10 @@ target_hinshi = ["名詞", "形容詞", "形容動詞"]
 exclude = ["非自立", "接尾"]
 with open("stopwordlist.txt") as f:
     swl = [s.strip() for s in f.readlines()]
+
+# バックグラウンドタスク管理
+tasks = {}
+tasks_lock = Lock()
 
 
 def register_app(host):
@@ -68,6 +74,21 @@ def checkStatus():
     return (id, scnt, acct)
 
 
+def checkStatus_with_creds(session_data):
+    """セッション情報をパラメータで受け取る版（スレッド内用）"""
+    mstdn = Mastodon(
+        client_id=session_data["client_id"],
+        client_secret=session_data["client_secret"],
+        access_token=session_data["access_token"],
+        api_base_url=session_data["uri"],
+    )
+    account = mstdn.account_verify_credentials()
+    id = account["id"]
+    acct = account["acct"]
+    scnt = account["statuses_count"]
+    return (id, scnt, acct)
+
+
 def reform(text):
     text = re.sub(r":\w+:", "", text)
     text = re.sub(r"</?p>", "", text)
@@ -86,6 +107,24 @@ def getToots(id, lim, max, vis=["public"]):
         client_secret=session["client_secret"],
         access_token=session["access_token"],
         api_base_url=session["uri"],
+    )
+    ltl = mstdn.account_statuses(id, limit=lim, max_id=max)
+    for row in ltl:
+        if row["reblog"] == None:
+            if row["visibility"] in vis:
+                text += reform(row["content"]) + "\n"
+        toot_id = row["id"]
+    return (text, toot_id)
+
+
+def getToots_with_creds(id, lim, max, session_data, vis=["public"]):
+    """セッション情報をパラメータで受け取る版（スレッド内用）"""
+    text = ""
+    mstdn = Mastodon(
+        client_id=session_data["client_id"],
+        client_secret=session_data["client_secret"],
+        access_token=session_data["access_token"],
+        api_base_url=session_data["uri"],
     )
     ltl = mstdn.account_statuses(id, limit=lim, max_id=max)
     for row in ltl:
@@ -144,11 +183,83 @@ def wc(ttl, vis, exl):
             collocations=False,
             stopwords="",
         ).generate(kekka)
-        fn = create_at(int(datetime.now().timestamp()))
-        wordcloud.to_file("./static/out/" + str(fn) + ".png")
+        fn = str(create_at(int(datetime.now().timestamp())))
+        wordcloud.to_file("./static/out/" + fn + ".png")
         return fn
 
 
+def wc_with_creds(ttl, vis, exl, session_data):
+    """セッション情報をパラメータで受け取る版（スレッド内用）"""
+    t = ttl
+    check = checkStatus_with_creds(session_data)
+    print(check)
+    if check[1] < t:
+        t = check[1]
+    id = check[0]
+    toots = ""
+    max = None
+    while t > 0:
+        print(t, max)
+        if t > 40:
+            data = getToots_with_creds(id, 40, max, session_data, vis)
+        else:
+            data = getToots_with_creds(id, t, max, session_data, vis)
+        t -= 40
+        toots += data[0]
+        max = int(data[1]) - 1
+    kekka = ""
+    for chunk in m.parse(toots).splitlines()[:-1]:
+        (surface, feature) = chunk.split("\t")
+        if feature.split(",")[0] in target_hinshi:
+            if feature.split(",")[1] not in exl:
+                if feature.split(",")[0] == "名詞":
+                    if surface not in exl:
+                        kekka += surface + "\n"
+                else:
+                    if feature.split(",")[6] not in exl:
+                        kekka += feature.split(",")[6] + "\n"
+    if kekka == "":
+        return None
+    else:
+        wordcloud = WordCloud(
+            background_color="white",
+            font_path="./Kazesawa-Regular.ttf",
+            width=1024,
+            height=768,
+            collocations=False,
+            stopwords="",
+        ).generate(kekka)
+        fn = str(create_at(int(datetime.now().timestamp())))
+        wordcloud.to_file("./static/out/" + fn + ".png")
+        return fn
+
+
+
+def wc_background(task_id, ttl, vis, exl, session_data):
+    """バックグラウンドでワードクラウドを生成"""
+    try:
+        with tasks_lock:
+            tasks[task_id]['status'] = 'processing'
+        
+        
+        
+        # ワードクラウド生成
+        filename = wc_with_creds(ttl, vis, exl, session_data)
+        
+        with tasks_lock:
+            if filename is None:
+                tasks[task_id]['status'] = 'error'
+                tasks[task_id]['error'] = 'notext'
+            else:
+                tasks[task_id]['status'] = 'completed'
+                tasks[task_id]['filename'] = filename
+    except Exception as e:
+        with tasks_lock:
+            tasks[task_id]['status'] = 'error'
+            tasks[task_id]['error'] = str(e)
+        print(f"Task {task_id} error: {e}")
+        import traceback
+        traceback.print_exc()
 @app.route("/")
 def index():
     return render_template("index.html", site_url=app.config["SITE_URL"])
@@ -250,23 +361,83 @@ def result():
                 exl = []
             ex = request.form["exlist"]
             exl.extend(re.split(r"\W+", ex))
-            filename = wc(num, vis, exl)
-            if filename == None:
-                return render_template(
-                    "setting.html",
-                    status="logout",
-                    site_url=app.config["SITE_URL"],
-                    error="notext",
-                )
-            else:
-                return render_template(
-                    "result.html",
-                    status="logout",
-                    filename=filename,
-                    site_url=app.config["SITE_URL"],
-                )
+            
+            # タスクID生成
+            task_id = str(create_at(int(datetime.now().timestamp())))
+            
+            # タスク情報登録
+            with tasks_lock:
+                tasks[task_id] = {
+                    'status': 'queued',
+                    'created_at': datetime.now(),
+                    'filename': None,
+                    'error': None
+                }
+            
+            # セッション情報を保存
+            session_data = {
+                'client_id': session['client_id'],
+                'client_secret': session['client_secret'],
+                'access_token': session['access_token'],
+                'uri': session['uri']
+            }
+            
+            # バックグラウンドスレッド開始
+            thread = threading.Thread(
+                target=wc_background,
+                args=(task_id, num, vis, exl, session_data)
+            )
+            thread.daemon = True
+            thread.start()
+            
+            # 待機ページを返す
+            return render_template(
+                "waiting.html",
+                task_id=task_id,
+                status="logout",
+                site_url=app.config["SITE_URL"]
+            )
         else:
             return redirect(url_for("setting"))
+
+
+@app.route("/check-status/<task_id>")
+def check_status(task_id):
+    """タスクの進行状況を確認"""
+    with tasks_lock:
+        if task_id not in tasks:
+            return jsonify({'status': 'not_found'}), 404
+        
+        task = tasks[task_id]
+        response = {
+            'status': task['status'],
+            'created_at': task['created_at'].isoformat()
+        }
+        
+        if task['status'] == 'completed':
+            response['filename'] = str(task['filename'])
+        elif task['status'] == 'error':
+            response['error'] = task['error']
+        
+        return jsonify(response)
+
+
+@app.route("/result-view")
+def result_view():
+    """タスク完了後の結果表示ページ"""
+    if session.get("access_token") is None:
+        return redirect(url_for("login"))
+    
+    filename = request.args.get("filename")
+    if not filename:
+        return redirect(url_for("setting"))
+    
+    return render_template(
+        "result.html",
+        status="logout",
+        filename=filename,
+        site_url=app.config["SITE_URL"]
+    )
 
 
 @app.route("/toot", methods=["POST"])

@@ -27,6 +27,23 @@ tasks = {}
 tasks_lock = Lock()
 
 
+def make_mastodon_client(session_data):
+    return Mastodon(
+        client_id=session_data["client_id"],
+        client_secret=session_data["client_secret"],
+        access_token=session_data["access_token"],
+        api_base_url=session_data["uri"],
+    )
+
+
+def update_task(task_id, **changes):
+    with tasks_lock:
+        task = tasks.get(task_id)
+        if task is None:
+            return
+        task.update(changes)
+
+
 def register_app(host):
     data = {
         "client_name": "TootCloud",
@@ -61,12 +78,7 @@ def get_token(host, client_id, client_secret, code):
 
 
 def checkStatus():
-    mstdn = Mastodon(
-        client_id=session["client_id"],
-        client_secret=session["client_secret"],
-        access_token=session["access_token"],
-        api_base_url=session["uri"],
-    )
+    mstdn = make_mastodon_client(session)
     account = mstdn.account_verify_credentials()
     id = account["id"]
     acct = account["acct"]
@@ -76,12 +88,7 @@ def checkStatus():
 
 def checkStatus_with_creds(session_data):
     """セッション情報をパラメータで受け取る版（スレッド内用）"""
-    mstdn = Mastodon(
-        client_id=session_data["client_id"],
-        client_secret=session_data["client_secret"],
-        access_token=session_data["access_token"],
-        api_base_url=session_data["uri"],
-    )
+    mstdn = make_mastodon_client(session_data)
     account = mstdn.account_verify_credentials()
     id = account["id"]
     acct = account["acct"]
@@ -100,14 +107,29 @@ def reform(text):
     return text
 
 
-def getToots(id, lim, max, vis=["public"]):
+def collect_words(toots, exl):
+    words = []
+    for chunk in m.parse(toots).splitlines()[:-1]:
+        surface, feature = chunk.split("\t")
+        parts = feature.split(",")
+        hinshi = parts[0]
+        if hinshi not in target_hinshi:
+            continue
+        if parts[1] in exl:
+            continue
+        if hinshi == "名詞":
+            if surface not in exl:
+                words.append(surface)
+        else:
+            if parts[6] not in exl:
+                words.append(parts[6])
+    return "\n".join(words)
+
+
+def getToots(id, lim, max, vis=["public"], mstdn=None):
     text = ""
-    mstdn = Mastodon(
-        client_id=session["client_id"],
-        client_secret=session["client_secret"],
-        access_token=session["access_token"],
-        api_base_url=session["uri"],
-    )
+    if mstdn is None:
+        mstdn = make_mastodon_client(session)
     ltl = mstdn.account_statuses(id, limit=lim, max_id=max)
     for row in ltl:
         if row["reblog"] == None:
@@ -117,15 +139,11 @@ def getToots(id, lim, max, vis=["public"]):
     return (text, toot_id)
 
 
-def getToots_with_creds(id, lim, max, session_data, vis=["public"]):
+def getToots_with_creds(id, lim, max, session_data, vis=["public"], mstdn=None):
     """セッション情報をパラメータで受け取る版（スレッド内用）"""
     text = ""
-    mstdn = Mastodon(
-        client_id=session_data["client_id"],
-        client_secret=session_data["client_secret"],
-        access_token=session_data["access_token"],
-        api_base_url=session_data["uri"],
-    )
+    if mstdn is None:
+        mstdn = make_mastodon_client(session_data)
     ltl = mstdn.account_statuses(id, limit=lim, max_id=max)
     for row in ltl:
         if row["reblog"] == None:
@@ -145,33 +163,19 @@ def create_at(time):
 def wc(ttl, vis, exl):
     t = ttl
     check = checkStatus()
-    print(check)
     if check[1] < t:
         t = check[1]
     id = check[0]
+    mstdn = make_mastodon_client(session)
     toots = ""
     max = None
     while t > 0:
-        print(t, max)
-        if t > 40:
-            data = getToots(id, 40, max, vis)
-        else:
-            data = getToots(id, t, max, vis)
-        t -= 40
-        # print(data[0])
+        batch_size = 40 if t > 40 else t
+        data = getToots(id, batch_size, max, vis, mstdn)
+        t -= batch_size
         toots += data[0]
         max = int(data[1]) - 1
-    kekka = ""
-    for chunk in m.parse(toots).splitlines()[:-1]:
-        (surface, feature) = chunk.split("\t")
-        if feature.split(",")[0] in target_hinshi:
-            if feature.split(",")[1] not in exl:
-                if feature.split(",")[0] == "名詞":
-                    if surface not in exl:
-                        kekka += surface + "\n"
-                else:
-                    if feature.split(",")[6] not in exl:
-                        kekka += feature.split(",")[6] + "\n"
+    kekka = collect_words(toots, exl)
     if kekka == "":
         return None
     else:
@@ -188,39 +192,57 @@ def wc(ttl, vis, exl):
         return fn
 
 
-def wc_with_creds(ttl, vis, exl, session_data):
+def wc_with_creds(task_id, ttl, vis, exl, session_data):
     """セッション情報をパラメータで受け取る版（スレッド内用）"""
-    t = ttl
-    check = checkStatus_with_creds(session_data)
-    print(check)
-    if check[1] < t:
-        t = check[1]
+    check = session_data["account"]
+    total_count = min(ttl, check[1])
+    update_task(
+        task_id,
+        total_count=total_count,
+        fetched_count=0,
+        progress=0,
+        message=f"トゥート取得中 0/{total_count}",
+    )
+    t = total_count
     id = check[0]
+    mstdn = make_mastodon_client(session_data)
     toots = ""
     max = None
+    fetched_count = 0
     while t > 0:
-        print(t, max)
-        if t > 40:
-            data = getToots_with_creds(id, 40, max, session_data, vis)
-        else:
-            data = getToots_with_creds(id, t, max, session_data, vis)
-        t -= 40
+        batch_size = 40 if t > 40 else t
+        data = getToots_with_creds(id, batch_size, max, session_data, vis, mstdn)
+        t -= batch_size
         toots += data[0]
         max = int(data[1]) - 1
-    kekka = ""
-    for chunk in m.parse(toots).splitlines()[:-1]:
-        (surface, feature) = chunk.split("\t")
-        if feature.split(",")[0] in target_hinshi:
-            if feature.split(",")[1] not in exl:
-                if feature.split(",")[0] == "名詞":
-                    if surface not in exl:
-                        kekka += surface + "\n"
-                else:
-                    if feature.split(",")[6] not in exl:
-                        kekka += feature.split(",")[6] + "\n"
+        fetched_count += batch_size
+        progress = int((fetched_count / total_count) * 99) if total_count > 0 else 99
+        update_task(
+            task_id,
+            fetched_count=fetched_count,
+            total_count=total_count,
+            progress=progress,
+            message=f"トゥート取得中 {fetched_count}/{total_count}",
+        )
+
+    update_task(
+        task_id,
+        fetched_count=fetched_count,
+        total_count=total_count,
+        progress=99,
+        message=f"形態素解析中（取得済み {fetched_count}/{total_count}）",
+    )
+    kekka = collect_words(toots, exl)
     if kekka == "":
         return None
     else:
+        update_task(
+            task_id,
+            fetched_count=fetched_count,
+            total_count=total_count,
+            progress=99,
+            message=f"画像生成中（取得済み {fetched_count}/{total_count}）",
+        )
         wordcloud = WordCloud(
             background_color="white",
             font_path="./Kazesawa-Regular.ttf",
@@ -232,34 +254,49 @@ def wc_with_creds(ttl, vis, exl, session_data):
         fn = str(create_at(int(datetime.now().timestamp())))
         wordcloud.to_file("./static/out/" + fn + ".png")
         return fn
-
 
 
 def wc_background(task_id, ttl, vis, exl, session_data):
     """バックグラウンドでワードクラウドを生成"""
     try:
-        with tasks_lock:
-            tasks[task_id]['status'] = 'processing'
-        
-        
-        
+        update_task(
+            task_id,
+            status="processing",
+            progress=0,
+            message="準備中",
+            fetched_count=0,
+            total_count=0,
+        )
+
         # ワードクラウド生成
-        filename = wc_with_creds(ttl, vis, exl, session_data)
-        
-        with tasks_lock:
-            if filename is None:
-                tasks[task_id]['status'] = 'error'
-                tasks[task_id]['error'] = 'notext'
-            else:
-                tasks[task_id]['status'] = 'completed'
-                tasks[task_id]['filename'] = filename
+        filename = wc_with_creds(task_id, ttl, vis, exl, session_data)
+
+        if filename is None:
+            update_task(
+                task_id,
+                status="error",
+                progress=100,
+                message="生成できる本文がありません",
+                error="notext",
+            )
+        else:
+            update_task(
+                task_id,
+                status="completed",
+                progress=100,
+                message="完了",
+                filename=filename,
+            )
     except Exception as e:
-        with tasks_lock:
-            tasks[task_id]['status'] = 'error'
-            tasks[task_id]['error'] = str(e)
+        update_task(
+            task_id, status="error", progress=100, message="エラー", error=str(e)
+        )
         print(f"Task {task_id} error: {e}")
         import traceback
+
         traceback.print_exc()
+
+
 @app.route("/")
 def index():
     return render_template("index.html", site_url=app.config["SITE_URL"])
@@ -361,41 +398,45 @@ def result():
                 exl = []
             ex = request.form["exlist"]
             exl.extend(re.split(r"\W+", ex))
-            
+
             # タスクID生成
             task_id = str(create_at(int(datetime.now().timestamp())))
-            
+
             # タスク情報登録
             with tasks_lock:
                 tasks[task_id] = {
-                    'status': 'queued',
-                    'created_at': datetime.now(),
-                    'filename': None,
-                    'error': None
+                    "status": "queued",
+                    "created_at": datetime.now(),
+                    "filename": None,
+                    "error": None,
+                    "progress": 0,
+                    "message": "待機中",
+                    "fetched_count": 0,
+                    "total_count": 0,
                 }
-            
+
             # セッション情報を保存
             session_data = {
-                'client_id': session['client_id'],
-                'client_secret': session['client_secret'],
-                'access_token': session['access_token'],
-                'uri': session['uri']
+                "client_id": session["client_id"],
+                "client_secret": session["client_secret"],
+                "access_token": session["access_token"],
+                "uri": session["uri"],
+                "account": checkStatus(),
             }
-            
+
             # バックグラウンドスレッド開始
             thread = threading.Thread(
-                target=wc_background,
-                args=(task_id, num, vis, exl, session_data)
+                target=wc_background, args=(task_id, num, vis, exl, session_data)
             )
             thread.daemon = True
             thread.start()
-            
+
             # 待機ページを返す
             return render_template(
                 "waiting.html",
                 task_id=task_id,
                 status="logout",
-                site_url=app.config["SITE_URL"]
+                site_url=app.config["SITE_URL"],
             )
         else:
             return redirect(url_for("setting"))
@@ -406,19 +447,23 @@ def check_status(task_id):
     """タスクの進行状況を確認"""
     with tasks_lock:
         if task_id not in tasks:
-            return jsonify({'status': 'not_found'}), 404
-        
+            return jsonify({"status": "not_found"}), 404
+
         task = tasks[task_id]
         response = {
-            'status': task['status'],
-            'created_at': task['created_at'].isoformat()
+            "status": task["status"],
+            "created_at": task["created_at"].isoformat(),
         }
-        
-        if task['status'] == 'completed':
-            response['filename'] = str(task['filename'])
-        elif task['status'] == 'error':
-            response['error'] = task['error']
-        
+        response["progress"] = task.get("progress", 0)
+        response["message"] = task.get("message", "")
+        response["fetched_count"] = task.get("fetched_count", 0)
+        response["total_count"] = task.get("total_count", 0)
+
+        if task["status"] == "completed":
+            response["filename"] = str(task["filename"])
+        elif task["status"] == "error":
+            response["error"] = task["error"]
+
         return jsonify(response)
 
 
@@ -427,16 +472,16 @@ def result_view():
     """タスク完了後の結果表示ページ"""
     if session.get("access_token") is None:
         return redirect(url_for("login"))
-    
+
     filename = request.args.get("filename")
     if not filename:
         return redirect(url_for("setting"))
-    
+
     return render_template(
         "result.html",
         status="logout",
         filename=filename,
-        site_url=app.config["SITE_URL"]
+        site_url=app.config["SITE_URL"],
     )
 
 

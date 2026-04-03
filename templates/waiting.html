@@ -10,6 +10,10 @@
       
       <div id="loading" class="loading">
         <p><i class="fa fa-spinner fa-spin"></i> 処理中...</p>
+        <div class="progress-wrap" aria-hidden="true">
+          <div id="progress-bar" class="progress-bar"></div>
+        </div>
+        <p id="progress-text" class="progress-text">0%</p>
       </div>
       
       <div id="error" class="error" style="display: none;">
@@ -30,6 +34,30 @@
 .loading p {
   font-size: 1.2rem;
   color: #666;
+}
+
+.progress-wrap {
+  width: 100%;
+  height: 12px;
+  background: #e6e6e6;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 1rem;
+}
+
+.progress-bar {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #1976d2, #42a5f5);
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.progress-text {
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  color: #777;
+  text-align: center;
 }
 
 .fa-spinner {
@@ -58,17 +86,26 @@
 <script>
 const taskId = "{{ task_id }}";
 const checkInterval = 2000; // 2秒ごとにチェック
-const maxAttempts = 600; // 最大20分（600 * 2秒 = 1200秒）
-let attempts = 0;
+
+function updateProgress(progress, message, fetchedCount, totalCount) {
+  let safeProgress = Math.max(0, Math.min(progress || 0, 100));
+  if (totalCount > 0) {
+    safeProgress = Math.max(0, Math.min((fetchedCount / totalCount) * 99, 99));
+  }
+  document.getElementById('progress-bar').style.width = `${safeProgress}%`;
+  if (totalCount > 0) {
+    const countText = `${fetchedCount}/${totalCount}`;
+    if (message && message.includes(countText)) {
+      document.getElementById('progress-text').textContent = message;
+    } else {
+      document.getElementById('progress-text').textContent = `${message} / 取得 ${countText}`;
+    }
+  } else {
+    document.getElementById('progress-text').textContent = message || `${Math.floor(safeProgress)}%`;
+  }
+}
 
 function checkStatus() {
-  attempts++;
-  
-  if (attempts > maxAttempts) {
-    showError('タイムアウト: 処理に時間がかかりすぎています。もう一度お試しください。');
-    return;
-  }
-  
   fetch(`/check-status/${taskId}`)
     .then(response => {
       if (!response.ok) {
@@ -77,7 +114,10 @@ function checkStatus() {
       return response.json();
     })
     .then(data => {
+      updateProgress(data.progress, data.message, data.fetched_count, data.total_count);
+
       if (data.status === 'completed') {
+        updateProgress(100, '完了', data.fetched_count, data.total_count);
         // 完成！結果ページにリダイレクト
         window.location.href = `/result-view?filename=${encodeURIComponent(data.filename)}`;
       } else if (data.status === 'error') {
@@ -106,6 +146,7 @@ function showError(message) {
 // ページ読み込み時にチェック開始
 document.addEventListener('DOMContentLoaded', function() {
   // 最初のチェックは少し遅延させる
+  updateProgress(0, '待機中', 0, 0);
   setTimeout(checkStatus, 500);
 });
 </script>

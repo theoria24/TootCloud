@@ -33,9 +33,6 @@
 * [Flask](https://flask.palletsprojects.com/) 3.x
 * [Matplotlib](https://matplotlib.org/) 3.10.x
 
-## やりたい
-* 画像生成でタイムアウトになりがちなのでAjaxとかでなんとかする
-
 ## 何かあったら
 issueや[@theoria@wug.fun](https://wug.fun/@theoria)にお願いします。プルリクもお待ちしております。
 

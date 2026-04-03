@@ -1,0 +1,112 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<section class="container">
+  <div class="row">
+    <div class="column column-50 column-offset-25">
+      <h2>ワードクラウド生成中...</h2>
+      <p>トゥート履歴からワードクラウドを生成しています。<br>
+      このページは自動で進行状況を確認し、完了後に結果ページへ移動します。</p>
+      
+      <div id="loading" class="loading">
+        <p><i class="fa fa-spinner fa-spin"></i> 処理中...</p>
+      </div>
+      
+      <div id="error" class="error" style="display: none;">
+        <p><strong>エラーが発生しました</strong></p>
+        <p id="error-message"></p>
+        <a href="{{ url_for('setting') }}" class="button">設定に戻る</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+.loading {
+  text-align: center;
+  padding: 2rem;
+}
+
+.loading p {
+  font-size: 1.2rem;
+  color: #666;
+}
+
+.fa-spinner {
+  font-size: 2rem;
+  color: #1976d2;
+}
+
+.error {
+  padding: 1.5rem;
+  background-color: #ffebee;
+  border-left: 4px solid #f44336;
+  border-radius: 4px;
+}
+
+.error p {
+  margin: 0.5rem 0;
+  color: #c62828;
+}
+
+.error a {
+  margin-top: 1rem;
+  display: inline-block;
+}
+</style>
+
+<script>
+const taskId = "{{ task_id }}";
+const checkInterval = 2000; // 2秒ごとにチェック
+const maxAttempts = 600; // 最大20分（600 * 2秒 = 1200秒）
+let attempts = 0;
+
+function checkStatus() {
+  attempts++;
+  
+  if (attempts > maxAttempts) {
+    showError('タイムアウト: 処理に時間がかかりすぎています。もう一度お試しください。');
+    return;
+  }
+  
+  fetch(`/check-status/${taskId}`)
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.status === 'completed') {
+        // 完成！結果ページにリダイレクト
+        window.location.href = `/result-view?filename=${encodeURIComponent(data.filename)}`;
+      } else if (data.status === 'error') {
+        showError(data.error === 'notext' ? 
+          'テキストが見つかりません。別の設定で試してください。' : 
+          `エラー: ${data.error}`);
+      } else if (data.status === 'processing' || data.status === 'queued') {
+        // 処理継続中 → 次のチェック
+        setTimeout(checkStatus, checkInterval);
+      } else {
+        showError(`予期しない状態: ${data.status}`);
+      }
+    })
+    .catch(error => {
+      console.error('Error checking status:', error);
+      showError(`通信エラー: ${error.message}`);
+    });
+}
+
+function showError(message) {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('error').style.display = 'block';
+  document.getElementById('error-message').textContent = message;
+}
+
+// ページ読み込み時にチェック開始
+document.addEventListener('DOMContentLoaded', function() {
+  // 最初のチェックは少し遅延させる
+  setTimeout(checkStatus, 500);
+});
+</script>
+{% endblock %}

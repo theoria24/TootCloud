@@ -27,6 +27,15 @@ tasks = {}
 tasks_lock = Lock()
 
 
+def make_mastodon_client(session_data):
+    return Mastodon(
+        client_id=session_data["client_id"],
+        client_secret=session_data["client_secret"],
+        access_token=session_data["access_token"],
+        api_base_url=session_data["uri"],
+    )
+
+
 def register_app(host):
     data = {
         "client_name": "TootCloud",
@@ -61,12 +70,7 @@ def get_token(host, client_id, client_secret, code):
 
 
 def checkStatus():
-    mstdn = Mastodon(
-        client_id=session["client_id"],
-        client_secret=session["client_secret"],
-        access_token=session["access_token"],
-        api_base_url=session["uri"],
-    )
+    mstdn = make_mastodon_client(session)
     account = mstdn.account_verify_credentials()
     id = account["id"]
     acct = account["acct"]
@@ -76,12 +80,7 @@ def checkStatus():
 
 def checkStatus_with_creds(session_data):
     """セッション情報をパラメータで受け取る版（スレッド内用）"""
-    mstdn = Mastodon(
-        client_id=session_data["client_id"],
-        client_secret=session_data["client_secret"],
-        access_token=session_data["access_token"],
-        api_base_url=session_data["uri"],
-    )
+    mstdn = make_mastodon_client(session_data)
     account = mstdn.account_verify_credentials()
     id = account["id"]
     acct = account["acct"]
@@ -100,14 +99,29 @@ def reform(text):
     return text
 
 
-def getToots(id, lim, max, vis=["public"]):
+def collect_words(toots, exl):
+    words = []
+    for chunk in m.parse(toots).splitlines()[:-1]:
+        surface, feature = chunk.split("\t")
+        parts = feature.split(",")
+        hinshi = parts[0]
+        if hinshi not in target_hinshi:
+            continue
+        if parts[1] in exl:
+            continue
+        if hinshi == "名詞":
+            if surface not in exl:
+                words.append(surface)
+        else:
+            if parts[6] not in exl:
+                words.append(parts[6])
+    return "\n".join(words)
+
+
+def getToots(id, lim, max, vis=["public"], mstdn=None):
     text = ""
-    mstdn = Mastodon(
-        client_id=session["client_id"],
-        client_secret=session["client_secret"],
-        access_token=session["access_token"],
-        api_base_url=session["uri"],
-    )
+    if mstdn is None:
+        mstdn = make_mastodon_client(session)
     ltl = mstdn.account_statuses(id, limit=lim, max_id=max)
     for row in ltl:
         if row["reblog"] == None:
@@ -117,15 +131,11 @@ def getToots(id, lim, max, vis=["public"]):
     return (text, toot_id)
 
 
-def getToots_with_creds(id, lim, max, session_data, vis=["public"]):
+def getToots_with_creds(id, lim, max, session_data, vis=["public"], mstdn=None):
     """セッション情報をパラメータで受け取る版（スレッド内用）"""
     text = ""
-    mstdn = Mastodon(
-        client_id=session_data["client_id"],
-        client_secret=session_data["client_secret"],
-        access_token=session_data["access_token"],
-        api_base_url=session_data["uri"],
-    )
+    if mstdn is None:
+        mstdn = make_mastodon_client(session_data)
     ltl = mstdn.account_statuses(id, limit=lim, max_id=max)
     for row in ltl:
         if row["reblog"] == None:
@@ -145,33 +155,21 @@ def create_at(time):
 def wc(ttl, vis, exl):
     t = ttl
     check = checkStatus()
-    print(check)
     if check[1] < t:
         t = check[1]
     id = check[0]
+    mstdn = make_mastodon_client(session)
     toots = ""
     max = None
     while t > 0:
-        print(t, max)
         if t > 40:
-            data = getToots(id, 40, max, vis)
+            data = getToots(id, 40, max, vis, mstdn)
         else:
-            data = getToots(id, t, max, vis)
+            data = getToots(id, t, max, vis, mstdn)
         t -= 40
-        # print(data[0])
         toots += data[0]
         max = int(data[1]) - 1
-    kekka = ""
-    for chunk in m.parse(toots).splitlines()[:-1]:
-        (surface, feature) = chunk.split("\t")
-        if feature.split(",")[0] in target_hinshi:
-            if feature.split(",")[1] not in exl:
-                if feature.split(",")[0] == "名詞":
-                    if surface not in exl:
-                        kekka += surface + "\n"
-                else:
-                    if feature.split(",")[6] not in exl:
-                        kekka += feature.split(",")[6] + "\n"
+    kekka = collect_words(toots, exl)
     if kekka == "":
         return None
     else:
@@ -191,33 +189,22 @@ def wc(ttl, vis, exl):
 def wc_with_creds(ttl, vis, exl, session_data):
     """セッション情報をパラメータで受け取る版（スレッド内用）"""
     t = ttl
-    check = checkStatus_with_creds(session_data)
-    print(check)
+    check = session_data["account"]
     if check[1] < t:
         t = check[1]
     id = check[0]
+    mstdn = make_mastodon_client(session_data)
     toots = ""
     max = None
     while t > 0:
-        print(t, max)
         if t > 40:
-            data = getToots_with_creds(id, 40, max, session_data, vis)
+            data = getToots_with_creds(id, 40, max, session_data, vis, mstdn)
         else:
-            data = getToots_with_creds(id, t, max, session_data, vis)
+            data = getToots_with_creds(id, t, max, session_data, vis, mstdn)
         t -= 40
         toots += data[0]
         max = int(data[1]) - 1
-    kekka = ""
-    for chunk in m.parse(toots).splitlines()[:-1]:
-        (surface, feature) = chunk.split("\t")
-        if feature.split(",")[0] in target_hinshi:
-            if feature.split(",")[1] not in exl:
-                if feature.split(",")[0] == "名詞":
-                    if surface not in exl:
-                        kekka += surface + "\n"
-                else:
-                    if feature.split(",")[6] not in exl:
-                        kekka += feature.split(",")[6] + "\n"
+    kekka = collect_words(toots, exl)
     if kekka == "":
         return None
     else:
@@ -379,7 +366,8 @@ def result():
                 'client_id': session['client_id'],
                 'client_secret': session['client_secret'],
                 'access_token': session['access_token'],
-                'uri': session['uri']
+                'uri': session['uri'],
+                'account': checkStatus()
             }
             
             # バックグラウンドスレッド開始

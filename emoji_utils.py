@@ -421,7 +421,8 @@ def composite_emoji(
                     bb = _font.getbbox(word)
                     # getbbox uses the default "la" anchor:
                     # (left, la_y0, right, la_y0 + la_h).  la_h == mask_h.
-                    _bbox_cache[cache_key] = (bb[3] - bb[1], bb[1])
+                    _left, la_y0_val, _right, bottom = bb
+                    _bbox_cache[cache_key] = (bottom - la_y0_val, la_y0_val)
                 except Exception:
                     _bbox_cache[cache_key] = None
             cached = _bbox_cache[cache_key]

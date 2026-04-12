@@ -274,19 +274,18 @@ class TestCompositeEmoji(unittest.TestCase):
         pixel = result.getpixel((20, 10))
         self.assertEqual(pixel[:3], (255, 255, 255))
 
-    def test_font_path_adjusts_size_from_mask(self):
-        """font_path causes emoji to be sized by getmask height (no y_offset)."""
+    def test_font_path_adjusts_size_and_offset_from_bbox(self):
+        """font_path causes emoji to be sized by la_h and shifted by la_y0."""
         from PIL import Image
 
         bg = Image.new("RGB", (200, 200), "white")
         # Use identity map (new emoji-word approach)
         placeholder_to_emoji = {"😂": "😂"}
 
-        # Simulate a font where "😂" has mask height 22 (square glyph)
-        mock_mask = MagicMock()
-        mock_mask.size = (22, 22)
+        # Simulate a font where "😂" has bbox (0, 7, 22, 29):
+        # la_y0=7, la_h=22 (height of visible glyph)
         mock_font = MagicMock()
-        mock_font.getmask.return_value = mock_mask
+        mock_font.getbbox.return_value = (0, 7, 22, 29)
 
         render_calls = []
 
@@ -305,16 +304,16 @@ class TestCompositeEmoji(unittest.TestCase):
                 bg, layout, placeholder_to_emoji, font_path="/fake/font.ttf"
             )
 
-        # Emoji should be sized to mask_h=22 (not raw font_size=30)
+        # Emoji should be sized to la_h=22 (getbbox()[3] - getbbox()[1])
         self.assertEqual(render_calls, [22])
 
-        # Emoji should be pasted at (col=8, row=5) — NO y_offset
-        # A red 22×22 square starting at (8, 5); check a pixel inside it.
-        pixel_inside = result.getpixel((19, 16))
+        # Emoji should be pasted at (col=8, row + la_y0 = 5 + 7 = 12).
+        # A red 22×22 square starting at (8, 12); check a pixel inside it.
+        pixel_inside = result.getpixel((19, 23))
         self.assertEqual(pixel_inside[:3], (255, 0, 0))
 
-        # A pixel at (8, 4) should be white (just above the emoji).
-        pixel_above = result.getpixel((8, 4))
+        # A pixel at (8, 11) should be white (just above the y-offset position).
+        pixel_above = result.getpixel((8, 11))
         self.assertEqual(pixel_above[:3], (255, 255, 255))
 
     def test_font_path_failure_falls_back_gracefully(self):

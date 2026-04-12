@@ -330,26 +330,37 @@ def composite_emoji(
     ``orientation`` is ``None`` for horizontal text and
     ``PIL.Image.ROTATE_90`` for text rotated 90° counter-clockwise.
 
-    Sizing rationale
-    ~~~~~~~~~~~~~~~~
+    Sizing and position rationale
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     Wordcloud's collision detection uses
     ``draw.textbbox((0, 0), word, font=font, anchor="lt")`` to determine the
-    reserved area.  With ``anchor="lt"`` the top-left origin (0, 0) is the
-    top of the *em square*, so the bounding box is
-    ``(0, 0, glyph_width, glyph_height)`` — it does **not** include the blank
-    ascender gap above the glyph.  The reserved region therefore starts at
-    exactly ``(row * scale, col * scale)`` in the canvas.
+    reserved area height (*lt_h*).  However, the actual drawing in
+    ``generate_from_frequencies`` and ``to_image()`` both call ``draw.text``
+    with the **default Pillow anchor** ``"la"`` (left-ascender), which places
+    each glyph ``font.getbbox(word)[1]`` pixels (*la_y0*) **below** the stored
+    anchor point.  This creates an anchor–glyph mismatch:
 
-    To fill that region precisely without overflowing into adjacent words we:
+    - Collision box occupies ``[row, row + lt_h]`` (from ``textbbox("lt")``).
+    - Actual glyph pixels occupy ``[row + la_y0, row + la_y0 + la_h]``
+      (drawn with anchor ``"la"``; ``la_h == lt_h``).
 
-    1. Paste the Twemoji at ``(col * scale, row * scale)`` — the same pen
-       position wordcloud used — with **no y-offset**.
-    2. Size the Twemoji to ``getmask(word).size[1]`` (the glyph height,
-       identical to ``textbbox(anchor="lt")[3]``), which is the exact height
-       wordcloud reserved.
+    Words placed in the gap ``[row, row + la_y0]`` — where the collision box
+    exists but no monochrome pixels do — can fit without triggering an
+    occupancy conflict.  Their glyphs then extend into ``[row + la_y0, ...]``,
+    which is exactly where the Twemoji must go.  Pasting without a y-offset
+    (at ``y = row``) therefore causes large, systematic visual overlaps between
+    the Twemoji and adjacent words.
+
+    The fix is to apply ``y_offset = la_y0`` so the Twemoji is pasted at
+    ``(col * scale, row * scale + la_y0 * scale)``, aligning it with the
+    monochrome glyph and eliminating those major overlaps.
+
+    The Twemoji is sized to ``la_h = lt_h = getbbox()[3] - getbbox()[1]``,
+    the visible glyph height (identical to ``textbbox("lt")[3]`` and
+    ``getmask().size[1]`` in practice).
 
     When *font_path* is ``None`` the size falls back to
-    ``font_size * wc_scale * font_size_scale``.
+    ``font_size * wc_scale * font_size_scale`` and no y-offset is applied.
 
     Parameters
     ----------
@@ -373,8 +384,10 @@ def composite_emoji(
         and font_size, matching the scaling used by ``WordCloud.to_image()``.
     font_path:
         Path to the TrueType font used by the word cloud.  When provided,
-        ``getmask(word).size[1]`` is used as the emoji size so it exactly
-        matches the collision height wordcloud reserved for each token.
+        ``font.getbbox(word)`` is used to derive both the emoji size
+        (``la_h = getbbox()[3] - getbbox()[1]``, identical to ``getmask().size[1]``)
+        and the vertical offset (*la_y0* = ``getbbox()[1]``) for correct
+        glyph alignment.
 
     Returns
     -------
@@ -383,8 +396,9 @@ def composite_emoji(
     """
     result = wc_image.convert("RGBA")
 
-    # Cache glyph mask heights keyed by (scaled_font_size, word).
-    _mask_h_cache: Dict[Tuple[int, str], Optional[int]] = {}
+    # Cache glyph metrics keyed by (scaled_font_size, word).
+    # Value is (mask_h, la_y0) or None on failure.
+    _bbox_cache: Dict[Tuple[int, str], Optional[Tuple[int, int]]] = {}
 
     for (word, count), font_size, position, orientation, color in layout_:
         if word not in placeholder_to_emoji:
@@ -394,16 +408,28 @@ def composite_emoji(
 
         scaled_font_size = max(1, int(font_size * wc_scale))
 
+        # la_y0: vertical offset from the recorded anchor point to the top of
+        # the visible glyph.  Applied to y_pixel below so the Twemoji lands
+        # on the actual drawn glyph (see positioning rationale in the
+        # docstring).
+        la_y0 = 0
         if font_path is not None:
             cache_key = (scaled_font_size, word)
-            if cache_key not in _mask_h_cache:
+            if cache_key not in _bbox_cache:
                 try:
                     _font = ImageFont.truetype(font_path, scaled_font_size)
-                    _mask_h_cache[cache_key] = _font.getmask(word).size[1]
+                    bb = _font.getbbox(word)
+                    # getbbox uses the default "la" anchor:
+                    # (left, la_y0, right, la_y0 + la_h).  la_h == mask_h.
+                    _bbox_cache[cache_key] = (bb[3] - bb[1], bb[1])
                 except Exception:
-                    _mask_h_cache[cache_key] = None
-            mask_h = _mask_h_cache[cache_key]
-            size = max(1, int((mask_h if mask_h is not None else scaled_font_size) * font_size_scale))
+                    _bbox_cache[cache_key] = None
+            cached = _bbox_cache[cache_key]
+            if cached is not None:
+                mask_h, la_y0 = cached
+                size = max(1, int(mask_h * font_size_scale))
+            else:
+                size = max(1, int(scaled_font_size * font_size_scale))
         else:
             size = max(1, int(scaled_font_size * font_size_scale))
 
@@ -412,12 +438,14 @@ def composite_emoji(
             continue
 
         # position = (row, col) == (y_pixel, x_pixel) before scaling.
-        # Wordcloud collision detection uses textbbox(anchor="lt") which
-        # reserves [row, row+glyph_h] × [col, col+glyph_w] in canvas space.
-        # Pasting at (col*scale, row*scale) keeps the Twemoji within that
-        # reserved area, preventing any overlap with adjacent words.
+        # wordcloud records the "la" (left-ascender) anchor point as the
+        # word position in layout_, and both generate_from_frequencies and
+        # to_image() draw glyphs with the default "la" anchor.  This places
+        # every glyph la_y0 pixels *below* the stored row value.  We must
+        # shift the Twemoji by the same amount so it aligns with the
+        # monochrome glyph rather than the raw anchor point.
         x_pixel = int(position[1] * wc_scale)
-        y_pixel = int(position[0] * wc_scale)
+        y_pixel = int(position[0] * wc_scale) + int(la_y0 * wc_scale)
 
         if orientation is not None:
             # ROTATE_90 rotates the image 90° counter-clockwise to match how

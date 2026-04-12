@@ -218,6 +218,50 @@ def is_placeholder(word: str) -> bool:
     return bool(_PLACEHOLDER_RE.match(word))
 
 
+def build_emoji_wordmap(
+    emoji_freqs: Dict[str, int],
+    max_count: int = MAX_EMOJI_COUNT,
+) -> Tuple[Dict[str, str], Dict[str, int]]:
+    """Build an identity emoji-word mapping for direct emoji rendering in word clouds.
+
+    Unlike :func:`build_placeholder_map`, this function uses the emoji
+    characters themselves as the word-cloud tokens instead of opaque ``_eN``
+    placeholders.  Wordcloud renders each emoji with the configured font
+    (monochrome), giving collision detection based on the actual glyph shape.
+    Color Twemoji images are then composited on top at exactly those positions.
+
+    Kazesawa (the default font) renders every emoji glyph as a square whose
+    side length is approximately ``font_size * 0.73``.
+    This square bbox is what wordcloud's layout engine reserves,
+    so replacing it with a same-sized Twemoji avoids any overlap with adjacent
+    words.
+
+    Parameters
+    ----------
+    emoji_freqs:
+        ``{emoji_str: count}`` as returned by :func:`extract_emoji_frequencies`.
+    max_count:
+        Maximum number of distinct emoji to include.
+
+    Returns
+    -------
+    emoji_map : dict
+        ``{emoji_str: emoji_str}`` — identity mapping.  The same emoji string
+        is both the wordcloud token and the Twemoji lookup key.
+    emoji_word_freqs : dict
+        ``{emoji_str: count}`` trimmed to the top *max_count* entries by
+        frequency — ready to merge into word frequencies for
+        ``WordCloud.generate_from_frequencies()``.
+    """
+    sorted_emoji = sorted(
+        emoji_freqs.items(), key=lambda kv: kv[1], reverse=True
+    )[:max_count]
+
+    emoji_map: Dict[str, str] = {e: e for e, _ in sorted_emoji}
+    emoji_word_freqs: Dict[str, int] = dict(sorted_emoji)
+    return emoji_map, emoji_word_freqs
+
+
 def build_placeholder_map(
     emoji_freqs: Dict[str, int],
     max_count: int = MAX_EMOJI_COUNT,
@@ -269,11 +313,12 @@ def composite_emoji(
     wc_scale: float = 1.0,
     font_path: Optional[str] = None,
 ) -> Image.Image:
-    """Composite Twemoji images onto a word-cloud image at placeholder positions.
+    """Composite Twemoji images onto a word-cloud image at emoji token positions.
 
-    For each placeholder entry in *layout_* the corresponding Twemoji SVG is
-    rendered and pasted onto *wc_image* at the position and orientation
-    determined by wordcloud's layout algorithm.
+    For each entry in *layout_* that is present as a key in
+    *placeholder_to_emoji* the corresponding Twemoji SVG is rendered and pasted
+    onto *wc_image* at the position and orientation determined by wordcloud's
+    layout algorithm.
 
     Position and orientation conventions
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -285,33 +330,40 @@ def composite_emoji(
     ``orientation`` is ``None`` for horizontal text and
     ``PIL.Image.ROTATE_90`` for text rotated 90° counter-clockwise.
 
-    Font metrics and sizing
-    ~~~~~~~~~~~~~~~~~~~~~~~
-    When *font_path* is provided the function loads the word-cloud font at each
-    encountered font size and measures the actual glyph bounding box of the
-    placeholder token via ``ImageFont.getbbox``.  Two adjustments are then
-    applied:
+    Sizing rationale
+    ~~~~~~~~~~~~~~~~
+    Wordcloud's collision detection uses
+    ``draw.textbbox((0, 0), word, font=font, anchor="lt")`` to determine the
+    reserved area.  With ``anchor="lt"`` the top-left origin (0, 0) is the
+    top of the *em square*, so the bounding box is
+    ``(0, 0, glyph_width, glyph_height)`` — it does **not** include the blank
+    ascender gap above the glyph.  The reserved region therefore starts at
+    exactly ``(row * scale, col * scale)`` in the canvas.
 
-    1. **y-offset correction** – the glyph does not start at the PIL drawing
-       origin; it is shifted downward by ``bbox[1]`` pixels.  Without this
-       correction the emoji is pasted above the actual text area, overlapping
-       words placed just above by the layout engine.
-    2. **height-based sizing** – the emoji is sized to the *visible* glyph
-       height (``bbox[3] - bbox[1]``) rather than the raw *font_size*, so its
-       dimensions match the text it replaces.
+    To fill that region precisely without overflowing into adjacent words we:
 
-    When *font_path* is ``None`` (default) the legacy behaviour is preserved:
-    ``size = font_size * wc_scale * font_size_scale``, ``y_offset = 0``.
+    1. Paste the Twemoji at ``(col * scale, row * scale)`` — the same pen
+       position wordcloud used — with **no y-offset**.
+    2. Size the Twemoji to ``getmask(word).size[1]`` (the glyph height,
+       identical to ``textbbox(anchor="lt")[3]``), which is the exact height
+       wordcloud reserved.
+
+    When *font_path* is ``None`` the size falls back to
+    ``font_size * wc_scale * font_size_scale``.
 
     Parameters
     ----------
     wc_image:
         PIL Image produced by ``WordCloud.to_image()``.
     layout_:
-        ``wc.layout_`` – list of
+        ``wc.layout_`` — list of
         ``((word, count), font_size, (row, col), orientation, color)``.
     placeholder_to_emoji:
-        ``{placeholder_token: emoji_str}`` from :func:`build_placeholder_map`.
+        ``{word_token: emoji_str}`` mapping.  Can be the identity dict
+        ``{emoji_str: emoji_str}`` returned by :func:`build_emoji_wordmap`
+        (recommended) or the old-style ``{_eN: emoji_str}`` dict from
+        :func:`build_placeholder_map`.  Only words present as keys are
+        composited; all others are skipped.
     assets_path:
         Directory containing Twemoji SVG files.
     font_size_scale:
@@ -321,47 +373,37 @@ def composite_emoji(
         and font_size, matching the scaling used by ``WordCloud.to_image()``.
     font_path:
         Path to the TrueType font used by the word cloud.  When provided,
-        actual glyph metrics are used for precise sizing and positioning of
-        each emoji, preventing overlaps with adjacent words.
+        ``getmask(word).size[1]`` is used as the emoji size so it exactly
+        matches the collision height wordcloud reserved for each token.
 
     Returns
     -------
     PIL Image (RGB)
-        The word-cloud image with emoji composited in place of placeholders.
+        The word-cloud image with emoji composited in place of their tokens.
     """
     result = wc_image.convert("RGBA")
 
-    # Cache font bbox measurements keyed by (scaled_font_size, word) to avoid
-    # repeated font loads for the same size.
-    _bbox_cache: Dict[Tuple[int, str], Optional[Tuple[int, int, int, int]]] = {}
+    # Cache glyph mask heights keyed by (scaled_font_size, word).
+    _mask_h_cache: Dict[Tuple[int, str], Optional[int]] = {}
 
     for (word, count), font_size, position, orientation, color in layout_:
-        if not is_placeholder(word):
+        if word not in placeholder_to_emoji:
             continue
 
-        emoji_str = placeholder_to_emoji.get(word)
-        if emoji_str is None:
-            continue
+        emoji_str = placeholder_to_emoji[word]
 
         scaled_font_size = max(1, int(font_size * wc_scale))
 
-        # Determine emoji size and y-offset from actual font glyph metrics.
-        y_offset = 0
         if font_path is not None:
             cache_key = (scaled_font_size, word)
-            if cache_key not in _bbox_cache:
+            if cache_key not in _mask_h_cache:
                 try:
                     _font = ImageFont.truetype(font_path, scaled_font_size)
-                    _bbox_cache[cache_key] = _font.getbbox(word)
+                    _mask_h_cache[cache_key] = _font.getmask(word).size[1]
                 except Exception:
-                    _bbox_cache[cache_key] = None
-            bbox = _bbox_cache[cache_key]
-            if bbox is not None:
-                visible_height = max(1, bbox[3] - bbox[1])
-                size = max(1, int(visible_height * font_size_scale))
-                y_offset = bbox[1]
-            else:
-                size = max(1, int(scaled_font_size * font_size_scale))
+                    _mask_h_cache[cache_key] = None
+            mask_h = _mask_h_cache[cache_key]
+            size = max(1, int((mask_h if mask_h is not None else scaled_font_size) * font_size_scale))
         else:
             size = max(1, int(scaled_font_size * font_size_scale))
 
@@ -370,10 +412,12 @@ def composite_emoji(
             continue
 
         # position = (row, col) == (y_pixel, x_pixel) before scaling.
-        # to_image() places text at (col * scale, row * scale) in Pillow (x, y).
-        # y_offset shifts the emoji down to align with the actual glyph top.
+        # Wordcloud collision detection uses textbbox(anchor="lt") which
+        # reserves [row, row+glyph_h] × [col, col+glyph_w] in canvas space.
+        # Pasting at (col*scale, row*scale) keeps the Twemoji within that
+        # reserved area, preventing any overlap with adjacent words.
         x_pixel = int(position[1] * wc_scale)
-        y_pixel = int(position[0] * wc_scale) + y_offset
+        y_pixel = int(position[0] * wc_scale)
 
         if orientation is not None:
             # ROTATE_90 rotates the image 90° counter-clockwise to match how

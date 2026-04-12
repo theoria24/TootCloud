@@ -17,6 +17,7 @@ from threading import Lock
 
 import emoji_utils
 from emoji_utils import (
+    build_emoji_wordmap,
     build_placeholder_map,
     composite_emoji,
     extract_emoji_frequencies,
@@ -220,14 +221,14 @@ def _generate_wordcloud_image(word_text, emoji_freqs, output_path):
     word_freqs = dict(Counter(word_list))
 
     background_color = "white"
-    placeholder_to_emoji = {}
+    emoji_map = {}
 
     if _USE_COLOR_EMOJI and emoji_freqs:
-        placeholder_to_emoji, placeholder_freqs = build_placeholder_map(
+        emoji_map, emoji_word_freqs = build_emoji_wordmap(
             emoji_freqs,
             max_count=_EMOJI_MAX_COUNT,
         )
-        combined_freqs = {**word_freqs, **placeholder_freqs}
+        combined_freqs = {**word_freqs, **emoji_word_freqs}
     else:
         combined_freqs = word_freqs
 
@@ -240,15 +241,16 @@ def _generate_wordcloud_image(word_text, emoji_freqs, output_path):
         stopwords="",
     ).generate_from_frequencies(combined_freqs)
 
-    if _USE_COLOR_EMOJI and placeholder_to_emoji:
-        # プレースホルダを背景色で描画して不可視にする
+    if _USE_COLOR_EMOJI and emoji_map:
+        # Render emoji tokens in the background colour so they are invisible;
+        # the visible colour emoji images are composited on top below.
         wc_obj.layout_ = [
             (
                 (word, count),
                 font_size,
                 position,
                 orientation,
-                background_color if is_placeholder(word) else color,
+                background_color if word in emoji_map else color,
             )
             for (word, count), font_size, position, orientation, color
             in wc_obj.layout_
@@ -258,7 +260,7 @@ def _generate_wordcloud_image(word_text, emoji_freqs, output_path):
         img = composite_emoji(
             img,
             wc_obj.layout_,
-            placeholder_to_emoji,
+            emoji_map,
             assets_path=_TWEMOJI_ASSETS_PATH,
             font_size_scale=_EMOJI_FONT_SIZE_SCALE,
             wc_scale=getattr(wc_obj, "scale", 1.0),

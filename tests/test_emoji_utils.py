@@ -274,17 +274,19 @@ class TestCompositeEmoji(unittest.TestCase):
         pixel = result.getpixel((20, 10))
         self.assertEqual(pixel[:3], (255, 255, 255))
 
-    def test_font_path_adjusts_y_offset_and_size(self):
-        """font_path causes emoji to be sized by visible glyph height and offset by bbox[1]."""
+    def test_font_path_adjusts_size_from_mask(self):
+        """font_path causes emoji to be sized by getmask height (no y_offset)."""
         from PIL import Image
 
         bg = Image.new("RGB", (200, 200), "white")
-        placeholder_to_emoji = {"_e0": "😂"}
+        # Use identity map (new emoji-word approach)
+        placeholder_to_emoji = {"😂": "😂"}
 
-        # Simulate a font where _e0 has y_offset=10 and visible height=20
-        # visible_height = bbox[3] - bbox[1] = 30 - 10 = 20
+        # Simulate a font where "😂" has mask height 22 (square glyph)
+        mock_mask = MagicMock()
+        mock_mask.size = (22, 22)
         mock_font = MagicMock()
-        mock_font.getbbox.return_value = (0, 10, 40, 30)  # visible_h=20, y_offset=10
+        mock_font.getmask.return_value = mock_mask
 
         render_calls = []
 
@@ -293,7 +295,7 @@ class TestCompositeEmoji(unittest.TestCase):
             return Image.new("RGBA", (size, size), (255, 0, 0, 255))
 
         layout = [
-            (("_e0", 1.0), 30, (5, 8), None, "white"),
+            (("😂", 1.0), 30, (5, 8), None, "white"),
         ]
 
         with patch.object(emoji_utils, "render_twemoji", side_effect=fake_render), \
@@ -303,16 +305,16 @@ class TestCompositeEmoji(unittest.TestCase):
                 bg, layout, placeholder_to_emoji, font_path="/fake/font.ttf"
             )
 
-        # Emoji should be sized to visible_height=20 (not font_size=30)
-        self.assertEqual(render_calls, [20])
+        # Emoji should be sized to mask_h=22 (not raw font_size=30)
+        self.assertEqual(render_calls, [22])
 
-        # Emoji should be pasted at (col=8, row=5 + y_offset=10) = (8, 15)
-        # A red 20×20 square starting at (8, 15); check a pixel inside it.
-        pixel_inside = result.getpixel((18, 25))
+        # Emoji should be pasted at (col=8, row=5) — NO y_offset
+        # A red 22×22 square starting at (8, 5); check a pixel inside it.
+        pixel_inside = result.getpixel((19, 16))
         self.assertEqual(pixel_inside[:3], (255, 0, 0))
 
-        # A pixel at (8, 14) should be white (just above the emoji).
-        pixel_above = result.getpixel((8, 14))
+        # A pixel at (8, 4) should be white (just above the emoji).
+        pixel_above = result.getpixel((8, 4))
         self.assertEqual(pixel_above[:3], (255, 255, 255))
 
     def test_font_path_failure_falls_back_gracefully(self):
@@ -343,6 +345,41 @@ class TestCompositeEmoji(unittest.TestCase):
         self.assertEqual(render_calls, [30])
         self.assertEqual(result.mode, "RGB")
 
+
+class TestBuildEmojiWordmap(unittest.TestCase):
+    """Tests for :func:`emoji_utils.build_emoji_wordmap`."""
+
+    def test_identity_mapping(self):
+        emoji_freqs = {"😂": 5, "🎉": 3}
+        emoji_map, word_freqs = emoji_utils.build_emoji_wordmap(emoji_freqs)
+        # Keys and values are the same emoji strings
+        self.assertEqual(emoji_map["😂"], "😂")
+        self.assertEqual(emoji_map["🎉"], "🎉")
+
+    def test_word_freqs_matches_input(self):
+        emoji_freqs = {"😂": 5, "🎉": 3}
+        _, word_freqs = emoji_utils.build_emoji_wordmap(emoji_freqs)
+        self.assertEqual(word_freqs["😂"], 5)
+        self.assertEqual(word_freqs["🎉"], 3)
+
+    def test_max_count_limit(self):
+        emoji_freqs = {chr(0x1F600 + i): i + 1 for i in range(10)}
+        emoji_map, word_freqs = emoji_utils.build_emoji_wordmap(emoji_freqs, max_count=3)
+        self.assertEqual(len(emoji_map), 3)
+        self.assertEqual(len(word_freqs), 3)
+
+    def test_sorted_by_frequency(self):
+        emoji_freqs = {"😂": 5, "🎉": 10, "🌸": 3}
+        emoji_map, _ = emoji_utils.build_emoji_wordmap(emoji_freqs, max_count=2)
+        # Top 2 by frequency: 🎉 (10), 😂 (5)
+        self.assertIn("🎉", emoji_map)
+        self.assertIn("😂", emoji_map)
+        self.assertNotIn("🌸", emoji_map)
+
+    def test_empty_input(self):
+        emoji_map, word_freqs = emoji_utils.build_emoji_wordmap({})
+        self.assertEqual(emoji_map, {})
+        self.assertEqual(word_freqs, {})
 
 if __name__ == "__main__":
     unittest.main()

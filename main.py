@@ -1,3 +1,6 @@
+from collections import Counter
+from pathlib import Path
+
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from tinydb import TinyDB, Query
 from mastodon import Mastodon
@@ -12,6 +15,15 @@ import MeCab
 import threading
 from threading import Lock
 
+import emoji_utils
+from emoji_utils import (
+    build_placeholder_map,
+    composite_emoji,
+    extract_emoji_frequencies,
+    is_placeholder,
+    strip_emoji,
+)
+
 app = Flask(__name__)
 app.config.from_object("config")
 db = TinyDB("db.json")
@@ -21,6 +33,14 @@ target_hinshi = ["名詞", "形容詞", "形容動詞"]
 exclude = ["非自立", "接尾"]
 with open("stopwordlist.txt") as f:
     swl = [s.strip() for s in f.readlines()]
+
+# カラー絵文字設定（config.py で上書き可能）
+_USE_COLOR_EMOJI: bool = app.config.get("USE_COLOR_EMOJI", True)
+_EMOJI_MAX_COUNT: int = app.config.get("EMOJI_MAX_COUNT", 50)
+_EMOJI_FONT_SIZE_SCALE: float = app.config.get("EMOJI_FONT_SIZE_SCALE", 1.0)
+_TWEMOJI_ASSETS_PATH: Path = Path(
+    app.config.get("TWEMOJI_ASSETS_PATH", "./assets/twemoji/svg")
+)
 
 # バックグラウンドタスク管理
 tasks = {}
@@ -109,7 +129,8 @@ def reform(text):
 
 def collect_words(toots, exl):
     words = []
-    for chunk in m.parse(toots).splitlines()[:-1]:
+    clean = strip_emoji(toots)
+    for chunk in m.parse(clean).splitlines()[:-1]:
         surface, feature = chunk.split("\t")
         parts = feature.split(",")
         hinshi = parts[0]
@@ -124,6 +145,26 @@ def collect_words(toots, exl):
             if parts[6] not in exl:
                 words.append(parts[6])
     return "\n".join(words)
+
+
+def collect_words_and_emoji(toots, exl):
+    """MeCabで単語を抽出し、絵文字の頻度も別途集計して返す。
+
+    Parameters
+    ----------
+    toots : str
+        投稿テキストの連結文字列（HTMLデコード済み）。
+    exl : list
+        除外語リスト。
+
+    Returns
+    -------
+    tuple[str, dict]
+        (改行区切りの単語列, {絵文字: 出現回数} の辞書)
+    """
+    emoji_freqs = extract_emoji_frequencies(toots)
+    word_text = collect_words(toots, exl)
+    return word_text, emoji_freqs
 
 
 def getToots(id, lim, max, vis=["public"], mstdn=None):
@@ -160,6 +201,73 @@ def create_at(time):
     return id
 
 
+def _generate_wordcloud_image(word_text, emoji_freqs, output_path):
+    """ワードクラウド画像を生成してファイルに保存する。
+
+    カラー絵文字モードが有効な場合、絵文字をプレースホルダとしてレイアウトに
+    混入させ、Twemoji SVG を合成して PNG に保存する。
+
+    Parameters
+    ----------
+    word_text : str
+        改行区切りの単語列（MeCab 出力）。
+    emoji_freqs : dict
+        {絵文字: 出現回数} の辞書。空でも可。
+    output_path : str
+        保存先 PNG ファイルパス。
+    """
+    word_list = [w for w in word_text.split("\n") if w.strip()]
+    word_freqs = dict(Counter(word_list))
+
+    background_color = "white"
+    placeholder_to_emoji = {}
+
+    if _USE_COLOR_EMOJI and emoji_freqs:
+        placeholder_to_emoji, placeholder_freqs = build_placeholder_map(
+            emoji_freqs,
+            max_count=_EMOJI_MAX_COUNT,
+        )
+        combined_freqs = {**word_freqs, **placeholder_freqs}
+    else:
+        combined_freqs = word_freqs
+
+    wc_obj = WordCloud(
+        background_color=background_color,
+        font_path="./Kazesawa-Regular.ttf",
+        width=1024,
+        height=768,
+        collocations=False,
+        stopwords="",
+    ).generate_from_frequencies(combined_freqs)
+
+    if _USE_COLOR_EMOJI and placeholder_to_emoji:
+        # プレースホルダを背景色で描画して不可視にする
+        wc_obj.layout_ = [
+            (
+                (word, count),
+                font_size,
+                position,
+                orientation,
+                background_color if is_placeholder(word) else color,
+            )
+            for (word, count), font_size, position, orientation, color
+            in wc_obj.layout_
+        ]
+
+        img = wc_obj.to_image()
+        img = composite_emoji(
+            img,
+            wc_obj.layout_,
+            placeholder_to_emoji,
+            assets_path=_TWEMOJI_ASSETS_PATH,
+            font_size_scale=_EMOJI_FONT_SIZE_SCALE,
+            wc_scale=getattr(wc_obj, "scale", 1.0),
+        )
+        img.save(output_path)
+    else:
+        wc_obj.to_file(output_path)
+
+
 def wc(ttl, vis, exl):
     t = ttl
     check = checkStatus()
@@ -175,20 +283,12 @@ def wc(ttl, vis, exl):
         t -= batch_size
         toots += data[0]
         max = int(data[1]) - 1
-    kekka = collect_words(toots, exl)
-    if kekka == "":
+    kekka, emoji_freqs = collect_words_and_emoji(toots, exl)
+    if kekka == "" and not emoji_freqs:
         return None
     else:
-        wordcloud = WordCloud(
-            background_color="white",
-            font_path="./Kazesawa-Regular.ttf",
-            width=1024,
-            height=768,
-            collocations=False,
-            stopwords="",
-        ).generate(kekka)
         fn = str(create_at(int(datetime.now().timestamp())))
-        wordcloud.to_file("./static/out/" + fn + ".png")
+        _generate_wordcloud_image(kekka, emoji_freqs, "./static/out/" + fn + ".png")
         return fn
 
 
@@ -232,8 +332,8 @@ def wc_with_creds(task_id, ttl, vis, exl, session_data):
         progress=99,
         message=f"形態素解析中（取得済み {fetched_count}/{total_count}）",
     )
-    kekka = collect_words(toots, exl)
-    if kekka == "":
+    kekka, emoji_freqs = collect_words_and_emoji(toots, exl)
+    if kekka == "" and not emoji_freqs:
         return None
     else:
         update_task(
@@ -243,16 +343,8 @@ def wc_with_creds(task_id, ttl, vis, exl, session_data):
             progress=99,
             message=f"画像生成中（取得済み {fetched_count}/{total_count}）",
         )
-        wordcloud = WordCloud(
-            background_color="white",
-            font_path="./Kazesawa-Regular.ttf",
-            width=1024,
-            height=768,
-            collocations=False,
-            stopwords="",
-        ).generate(kekka)
         fn = str(create_at(int(datetime.now().timestamp())))
-        wordcloud.to_file("./static/out/" + fn + ".png")
+        _generate_wordcloud_image(kekka, emoji_freqs, "./static/out/" + fn + ".png")
         return fn
 
 

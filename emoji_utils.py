@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import emoji as emoji_lib
-from PIL import Image
+from PIL import Image, ImageFont
 
 # ---------------------------------------------------------------------------
 # Default configuration values (can be overridden by callers)
@@ -267,6 +267,7 @@ def composite_emoji(
     assets_path: Path = TWEMOJI_ASSETS_PATH,
     font_size_scale: float = FONT_SIZE_SCALE,
     wc_scale: float = 1.0,
+    font_path: Optional[str] = None,
 ) -> Image.Image:
     """Composite Twemoji images onto a word-cloud image at placeholder positions.
 
@@ -284,6 +285,24 @@ def composite_emoji(
     ``orientation`` is ``None`` for horizontal text and
     ``PIL.Image.ROTATE_90`` for text rotated 90° counter-clockwise.
 
+    Font metrics and sizing
+    ~~~~~~~~~~~~~~~~~~~~~~~
+    When *font_path* is provided the function loads the word-cloud font at each
+    encountered font size and measures the actual glyph bounding box of the
+    placeholder token via ``ImageFont.getbbox``.  Two adjustments are then
+    applied:
+
+    1. **y-offset correction** – the glyph does not start at the PIL drawing
+       origin; it is shifted downward by ``bbox[1]`` pixels.  Without this
+       correction the emoji is pasted above the actual text area, overlapping
+       words placed just above by the layout engine.
+    2. **height-based sizing** – the emoji is sized to the *visible* glyph
+       height (``bbox[3] - bbox[1]``) rather than the raw *font_size*, so its
+       dimensions match the text it replaces.
+
+    When *font_path* is ``None`` (default) the legacy behaviour is preserved:
+    ``size = font_size * wc_scale * font_size_scale``, ``y_offset = 0``.
+
     Parameters
     ----------
     wc_image:
@@ -296,10 +315,14 @@ def composite_emoji(
     assets_path:
         Directory containing Twemoji SVG files.
     font_size_scale:
-        Multiplier applied to *font_size* to obtain the emoji image size.
+        Multiplier applied to the emoji image size.
     wc_scale:
         ``wc.scale`` (default ``1``).  Applied to both position coordinates
         and font_size, matching the scaling used by ``WordCloud.to_image()``.
+    font_path:
+        Path to the TrueType font used by the word cloud.  When provided,
+        actual glyph metrics are used for precise sizing and positioning of
+        each emoji, preventing overlaps with adjacent words.
 
     Returns
     -------
@@ -307,6 +330,10 @@ def composite_emoji(
         The word-cloud image with emoji composited in place of placeholders.
     """
     result = wc_image.convert("RGBA")
+
+    # Cache font bbox measurements keyed by (scaled_font_size, word) to avoid
+    # repeated font loads for the same size.
+    _bbox_cache: Dict[Tuple[int, str], Optional[Tuple[int, int, int, int]]] = {}
 
     for (word, count), font_size, position, orientation, color in layout_:
         if not is_placeholder(word):
@@ -316,15 +343,37 @@ def composite_emoji(
         if emoji_str is None:
             continue
 
-        size = max(1, int(font_size * wc_scale * font_size_scale))
+        scaled_font_size = max(1, int(font_size * wc_scale))
+
+        # Determine emoji size and y-offset from actual font glyph metrics.
+        y_offset = 0
+        if font_path is not None:
+            cache_key = (scaled_font_size, word)
+            if cache_key not in _bbox_cache:
+                try:
+                    _font = ImageFont.truetype(font_path, scaled_font_size)
+                    _bbox_cache[cache_key] = _font.getbbox(word)
+                except Exception:
+                    _bbox_cache[cache_key] = None
+            bbox = _bbox_cache[cache_key]
+            if bbox is not None:
+                visible_height = max(1, bbox[3] - bbox[1])
+                size = max(1, int(visible_height * font_size_scale))
+                y_offset = bbox[1]
+            else:
+                size = max(1, int(scaled_font_size * font_size_scale))
+        else:
+            size = max(1, int(scaled_font_size * font_size_scale))
+
         emoji_img = render_twemoji(emoji_str, size, assets_path)
         if emoji_img is None:
             continue
 
         # position = (row, col) == (y_pixel, x_pixel) before scaling.
         # to_image() places text at (col * scale, row * scale) in Pillow (x, y).
+        # y_offset shifts the emoji down to align with the actual glyph top.
         x_pixel = int(position[1] * wc_scale)
-        y_pixel = int(position[0] * wc_scale)
+        y_pixel = int(position[0] * wc_scale) + y_offset
 
         if orientation is not None:
             # ROTATE_90 rotates the image 90° counter-clockwise to match how

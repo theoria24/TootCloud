@@ -274,6 +274,75 @@ class TestCompositeEmoji(unittest.TestCase):
         pixel = result.getpixel((20, 10))
         self.assertEqual(pixel[:3], (255, 255, 255))
 
+    def test_font_path_adjusts_y_offset_and_size(self):
+        """font_path causes emoji to be sized by visible glyph height and offset by bbox[1]."""
+        from PIL import Image
+
+        bg = Image.new("RGB", (200, 200), "white")
+        placeholder_to_emoji = {"_e0": "😂"}
+
+        # Simulate a font where _e0 has y_offset=10 and visible height=20
+        # visible_height = bbox[3] - bbox[1] = 30 - 10 = 20
+        mock_font = MagicMock()
+        mock_font.getbbox.return_value = (0, 10, 40, 30)  # visible_h=20, y_offset=10
+
+        render_calls = []
+
+        def fake_render(emoji_str, size, assets_path):
+            render_calls.append(size)
+            return Image.new("RGBA", (size, size), (255, 0, 0, 255))
+
+        layout = [
+            (("_e0", 1.0), 30, (5, 8), None, "white"),
+        ]
+
+        with patch.object(emoji_utils, "render_twemoji", side_effect=fake_render), \
+             patch.object(emoji_utils, "ImageFont") as mock_if:
+            mock_if.truetype.return_value = mock_font
+            result = emoji_utils.composite_emoji(
+                bg, layout, placeholder_to_emoji, font_path="/fake/font.ttf"
+            )
+
+        # Emoji should be sized to visible_height=20 (not font_size=30)
+        self.assertEqual(render_calls, [20])
+
+        # Emoji should be pasted at (col=8, row=5 + y_offset=10) = (8, 15)
+        # A red 20×20 square starting at (8, 15); check a pixel inside it.
+        pixel_inside = result.getpixel((18, 25))
+        self.assertEqual(pixel_inside[:3], (255, 0, 0))
+
+        # A pixel at (8, 14) should be white (just above the emoji).
+        pixel_above = result.getpixel((8, 14))
+        self.assertEqual(pixel_above[:3], (255, 255, 255))
+
+    def test_font_path_failure_falls_back_gracefully(self):
+        """If the font cannot be loaded the emoji is still rendered at font_size."""
+        from PIL import Image
+
+        bg = Image.new("RGB", (200, 200), "white")
+        placeholder_to_emoji = {"_e0": "😂"}
+
+        render_calls = []
+
+        def fake_render(emoji_str, size, assets_path):
+            render_calls.append(size)
+            return Image.new("RGBA", (size, size), (0, 255, 0, 255))
+
+        layout = [
+            (("_e0", 1.0), 30, (10, 20), None, "white"),
+        ]
+
+        with patch.object(emoji_utils, "render_twemoji", side_effect=fake_render), \
+             patch.object(emoji_utils, "ImageFont") as mock_if:
+            mock_if.truetype.side_effect = IOError("font not found")
+            result = emoji_utils.composite_emoji(
+                bg, layout, placeholder_to_emoji, font_path="/nonexistent/font.ttf"
+            )
+
+        # Falls back to font_size * wc_scale * font_size_scale = 30
+        self.assertEqual(render_calls, [30])
+        self.assertEqual(result.mode, "RGB")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -262,6 +262,7 @@ def _generate_wordcloud_image(word_text, emoji_freqs, output_path):
             assets_path=_TWEMOJI_ASSETS_PATH,
             font_size_scale=_EMOJI_FONT_SIZE_SCALE,
             wc_scale=getattr(wc_obj, "scale", 1.0),
+            font_path=wc_obj.font_path,
         )
         img.save(output_path)
     else:

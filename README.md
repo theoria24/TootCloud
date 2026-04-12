@@ -1,6 +1,6 @@
 # TootCloud
 
-あなたのトゥートからワードクラウドを作成。絵文字は [Twemoji](https://github.com/twitter/twemoji) を使ってカラーで表示されます。
+あなたのトゥートからワードクラウドを作成。絵文字は [Twemoji](https://github.com/jdecked/twemoji) を使ってカラーで表示されます。
 
 ## 使い方
 1. `git clone https://github.com/theoria24/TootCloud.git`
@@ -20,12 +20,12 @@
 
 ```bash
 # Twemoji リポジトリからアセットを取得（Git が必要）
-git clone --depth 1 https://github.com/twitter/twemoji.git /tmp/twemoji
+git clone --depth 1 https://github.com/jdecked/twemoji.git /tmp/twemoji
 cp -r /tmp/twemoji/assets/svg/* assets/twemoji/svg/
 rm -rf /tmp/twemoji
 ```
 
-または [Twemoji のリリースページ](https://github.com/twitter/twemoji/releases) から zip をダウンロードして `assets/twemoji/svg/` に展開してください。
+または [Twemoji のリリースページ](https://github.com/jdecked/twemoji/releases) から zip をダウンロードして `assets/twemoji/svg/` に展開してください。
 
 カラー絵文字を無効にする場合は `config.py` に `USE_COLOR_EMOJI = False` を追加してください。
 

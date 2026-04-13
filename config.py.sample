@@ -2,3 +2,9 @@ DEBUG = False  # Flaskのデバッグ機能
 SECRET_KEY = '\xac\x13c\xb0b\xa6`\xac\xa1\xbd\xd2\x0e\xcc2\xde\x0b"\x84\xdbb\x91I\x03\x12'  # 必ず変更する。os.urandom(24)とかすると良い
 SITE_URL = "https://example.com"  # 公開時のアドレス
 # MECAB_OPT = "-r /usr/local/etc/mecabrc -d /usr/local/lib/mecab/dic/ipadic/" # MeCabのオプション
+
+# カラー絵文字（Twemoji）設定
+# USE_COLOR_EMOJI = True          # Twemojiカラー絵文字レンダリングの有効/無効（デフォルト: True）
+# EMOJI_MAX_COUNT = 50            # ワードクラウドに含める絵文字の最大種類数（デフォルト: 50）
+# EMOJI_FONT_SIZE_SCALE = 1.0     # フォントサイズ(px) → 絵文字画像サイズの倍率（デフォルト: 1.0）
+# TWEMOJI_ASSETS_PATH = "./assets/twemoji/svg"  # Twemoji SVGアセットのパス（デフォルト: ./assets/twemoji/svg）

@@ -52,6 +52,9 @@ nosetests.xml
 uwsgi.ini
 *.backup
 
+# Twemoji SVG assets (download separately, see README)
+assets/twemoji/svg/*.svg
+
 # important
 config.py
 db.json
